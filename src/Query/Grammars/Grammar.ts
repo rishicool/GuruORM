@@ -112,6 +112,11 @@ export class Grammar {
       query['columns'] = ['*'];
     }
 
+    // If we have unions, we need to wrap the query
+    if (query['unions'] && query['unions'].length > 0) {
+      return this.compileUnionAggregate(query);
+    }
+
     const sql: string[] = [];
 
     // Compile each component of the query
@@ -139,6 +144,47 @@ export class Grammar {
     });
 
     return sql.join(' ');
+  }
+
+  /**
+   * Compile a union aggregate query
+   */
+  protected compileUnionAggregate(query: Builder): string {
+    const sql = this.compileUnions(query);
+
+    if (query['orders'] && query['orders'].length > 0) {
+      return `${sql} ${this.compileOrders(query, query['orders'])}`;
+    }
+
+    return sql;
+  }
+
+  /**
+   * Compile the union statements into SQL
+   */
+  protected compileUnions(query: Builder): string {
+    let sql = this.compileSelectWithoutUnions(query);
+
+    query['unions'].forEach((union: any) => {
+      const keyword = union.all ? 'union all' : 'union';
+      const unionQuery = union.query;
+      sql += ` ${keyword} ${this.compileSelectWithoutUnions(unionQuery)}`;
+    });
+
+    return sql;
+  }
+
+  /**
+   * Compile a select query without unions
+   */
+  protected compileSelectWithoutUnions(query: Builder): string {
+    const originalUnions = query['unions'];
+    query['unions'] = [];
+    
+    const sql = this.compileSelect(query);
+    
+    query['unions'] = originalUnions;
+    return sql;
   }
 
   /**

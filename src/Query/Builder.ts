@@ -142,6 +142,29 @@ export class Builder {
   }
 
   /**
+   * Add a union statement to the query
+   */
+  union(query: Builder | Function, all = false): this {
+    if (typeof query === 'function') {
+      const callback = query;
+      query = this.newQuery();
+      callback(query);
+    }
+
+    this.unions.push({ query, all });
+    this.addBinding(query.getBindings(), 'union');
+
+    return this;
+  }
+
+  /**
+   * Add a union all statement to the query
+   */
+  unionAll(query: Builder | Function): this {
+    return this.union(query, true);
+  }
+
+  /**
    * Add a basic where clause to the query
    */
   where(column: string | Function, operator?: any, value?: any, boolean: 'and' | 'or' = 'and'): this {
@@ -486,6 +509,13 @@ export class Builder {
   protected setAggregate(func: string, columns: string[]): this {
     this.columns = [{ function: func, columns }];
     return this;
+  }
+
+  /**
+   * Create a new query builder instance
+   */
+  newQuery(): Builder {
+    return new Builder(this.connection, this.grammar, this.processor);
   }
 
   /**
