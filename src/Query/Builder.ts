@@ -248,7 +248,12 @@ export class Builder {
       boolean,
     });
 
-    this.addBinding(values, 'where');
+    // If values is a Builder (subquery), add its bindings instead of the Builder object
+    if (values && typeof values === 'object' && typeof (values as any).getBindings === 'function') {
+      this.addBinding((values as any).getBindings(), 'where');
+    } else {
+      this.addBinding(values, 'where');
+    }
 
     return this;
   }
@@ -344,9 +349,17 @@ export class Builder {
   /**
    * Add a where exists clause
    */
-  whereExists(callback: (query: Builder) => void, boolean: 'and' | 'or' = 'and', not = false): this {
-    const query = this.newQuery();
-    callback(query);
+  whereExists(callback: ((query: Builder) => void) | Builder, boolean: 'and' | 'or' = 'and', not = false): this {
+    let query: Builder;
+    
+    // If callback is already a Builder, use it directly
+    if (typeof callback === 'object' && typeof (callback as any).toSql === 'function') {
+      query = callback as Builder;
+    } else {
+      // Otherwise, treat it as a callback function
+      query = this.newQuery();
+      (callback as (query: Builder) => void)(query);
+    }
 
     this.wheres.push({
       type: not ? 'NotExists' : 'Exists',
@@ -513,6 +526,13 @@ export class Builder {
 
     this.addBinding(bindings, 'having');
     return this;
+  }
+
+  /**
+   * Add an "or having" clause to the query
+   */
+  orHaving(column: string, operator?: any, value?: any): this {
+    return this.having(column, operator, value, 'or');
   }
 
   /**

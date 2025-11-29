@@ -277,9 +277,9 @@ guruORM is open-sourced software licensed under the [MIT license](LICENSE).
 ## 🔗 Links
 
 - [Documentation](docs/getting-started.md)
-- [GitHub Repository](https://github.com/yourusername/guruorm)
+- [GitHub Repository](https://github.com/rishicool/guruorm)
 - [npm Package](https://www.npmjs.com/package/guruorm)
-- [Issue Tracker](https://github.com/yourusername/guruorm/issues)
+- [Issue Tracker](https://github.com/rishicool/guruorm/issues)
 
 ## 💖 Special Thanks
 

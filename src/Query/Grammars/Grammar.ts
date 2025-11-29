@@ -324,6 +324,10 @@ export class Grammar {
    * Compile a "where in" clause
    */
   protected whereIn(query: Builder, where: any): string {
+    // Check if values is a subquery (Builder instance)
+    if (where.values && typeof where.values === 'object' && typeof where.values.toSql === 'function') {
+      return this.whereInSub(query, where);
+    }
     const values = this.parameterize(where.values);
     return `${this.wrap(where.column)} in (${values})`;
   }
@@ -332,6 +336,10 @@ export class Grammar {
    * Compile a "where not in" clause
    */
   protected whereNotIn(query: Builder, where: any): string {
+    // Check if values is a subquery (Builder instance)
+    if (where.values && typeof where.values === 'object' && typeof where.values.toSql === 'function') {
+      return this.whereNotInSub(query, where);
+    }
     const values = this.parameterize(where.values);
     return `${this.wrap(where.column)} not in (${values})`;
   }
@@ -348,6 +356,70 @@ export class Grammar {
    */
   protected whereNotNull(query: Builder, where: any): string {
     return `${this.wrap(where.column)} is not null`;
+  }
+
+  /**
+   * Compile a "where between" clause
+   */
+  protected whereBetween(query: Builder, where: any): string {
+    const column = this.wrap(where.column);
+    return `${column} between ? and ?`;
+  }
+
+  /**
+   * Compile a "where not between" clause
+   */
+  protected whereNotBetween(query: Builder, where: any): string {
+    const column = this.wrap(where.column);
+    return `${column} not between ? and ?`;
+  }
+
+  /**
+   * Compile a "where in" subquery clause
+   */
+  protected whereInSub(query: Builder, where: any): string {
+    const column = this.wrap(where.column);
+    const subquery = where.values.toSql();
+    return `${column} in (${subquery})`;
+  }
+
+  /**
+   * Compile a "where not in" subquery clause
+   */
+  protected whereNotInSub(query: Builder, where: any): string {
+    const column = this.wrap(where.column);
+    const subquery = where.values.toSql();
+    return `${column} not in (${subquery})`;
+  }
+
+  /**
+   * Compile a "where exists" clause
+   */
+  protected whereExists(query: Builder, where: any): string {
+    const subquery = where.query.toSql();
+    return `exists (${subquery})`;
+  }
+
+  /**
+   * Compile a "where not exists" clause
+   */
+  protected whereNotExists(query: Builder, where: any): string {
+    const subquery = where.query.toSql();
+    return `not exists (${subquery})`;
+  }
+
+  /**
+   * Compile a raw where clause
+   */
+  protected whereRaw(query: Builder, where: any): string {
+    return where.sql;
+  }
+
+  /**
+   * Compile a "where column" clause
+   */
+  protected whereColumn(query: Builder, where: any): string {
+    return `${this.wrap(where.first)} ${where.operator} ${this.wrap(where.second)}`;
   }
 
   /**
