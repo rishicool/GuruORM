@@ -6,18 +6,18 @@ export interface ColumnDefinition {
   length?: number;
   precision?: number;
   scale?: number;
-  unsigned?: boolean;
-  nullable?: boolean;
-  default?: any;
+  _unsigned?: boolean;
+  _nullable?: boolean;
+  _default?: any;
   autoIncrement?: boolean;
-  primary?: boolean;
-  unique?: boolean;
-  index?: boolean;
-  comment?: string;
-  after?: string;
-  first?: boolean;
-  charset?: string;
-  collation?: string;
+  _primary?: boolean;
+  _unique?: boolean;
+  _index?: boolean;
+  _comment?: string;
+  _after?: string;
+  _first?: boolean;
+  _charset?: string;
+  _collation?: string;
   storedAs?: string;
   virtualAs?: string;
   generatedAs?: string;
@@ -25,6 +25,19 @@ export interface ColumnDefinition {
   invisible?: boolean;
   useCurrent?: boolean;
   useCurrentOnUpdate?: boolean;
+  
+  // Fluent modifier methods
+  nullable(): ColumnDefinition;
+  defaultTo(value: any): ColumnDefinition;
+  unsigned(): ColumnDefinition;
+  unique(): ColumnDefinition;
+  index(): ColumnDefinition;
+  primary(): ColumnDefinition;
+  comment(text: string): ColumnDefinition;
+  after(columnName: string): ColumnDefinition;
+  first(): ColumnDefinition;
+  charset(charsetName: string): ColumnDefinition;
+  collation(collationName: string): ColumnDefinition;
 }
 
 export class Blueprint {
@@ -60,12 +73,39 @@ export class Blueprint {
   /**
    * Add a new column to the blueprint.
    */
-  protected addColumn(type: string, name: string, parameters: Partial<ColumnDefinition> = {}): ColumnDefinition {
+  protected addColumn(type: string, name: string, parameters: any = {}): ColumnDefinition {
+    // Convert parameters with underscore prefix for properties that conflict with methods
+    const convertedParams: any = {};
+    for (const [key, value] of Object.entries(parameters)) {
+      if (['nullable', 'primary', 'unique', 'unsigned', 'index', 'first'].includes(key)) {
+        convertedParams[`_${key}`] = value;
+      } else if (key === 'default') {
+        convertedParams._default = value;
+      } else if (['comment', 'after', 'charset', 'collation'].includes(key)) {
+        convertedParams[`_${key}`] = value;
+      } else {
+        convertedParams[key] = value;
+      }
+    }
+
     const column: ColumnDefinition = {
       type,
       name,
-      ...parameters,
-    };
+      ...convertedParams,
+    } as any;
+
+    // Add fluent modifier methods
+    column.nullable = () => { (column as any)._nullable = true; return column; };
+    column.defaultTo = (value: any) => { (column as any)._default = value; return column; };
+    column.unsigned = () => { (column as any)._unsigned = true; return column; };
+    column.unique = () => { (column as any)._unique = true; return column; };
+    column.index = () => { (column as any)._index = true; return column; };
+    column.primary = () => { (column as any)._primary = true; return column; };
+    column.comment = (text: string) => { (column as any)._comment = text; return column; };
+    column.after = (columnName: string) => { (column as any)._after = columnName; return column; };
+    column.first = () => { (column as any)._first = true; return column; };
+    column.charset = (charsetName: string) => { (column as any)._charset = charsetName; return column; };
+    column.collation = (collationName: string) => { (column as any)._collation = collationName; return column; };
 
     this.columns.push(column);
     return column;
@@ -75,6 +115,20 @@ export class Blueprint {
    * Create a new auto-incrementing big integer column.
    */
   id(column: string = 'id'): ColumnDefinition {
+    return this.addColumn('bigIncrements', column, { autoIncrement: true, primary: true });
+  }
+
+  /**
+   * Create a new auto-incrementing integer column.
+   */
+  increments(column: string = 'id'): ColumnDefinition {
+    return this.addColumn('increments', column, { autoIncrement: true, primary: true });
+  }
+
+  /**
+   * Create a new auto-incrementing big integer column.
+   */
+  bigIncrements(column: string = 'id'): ColumnDefinition {
     return this.addColumn('bigIncrements', column, { autoIncrement: true, primary: true });
   }
 
@@ -296,10 +350,10 @@ export class Blueprint {
    */
   nullableMorphs(name: string, indexName?: string): void {
     const idColumn = this.unsignedBigInteger(`${name}_id`);
-    idColumn.nullable = true;
+    (idColumn as any)._nullable = true;
     
     const typeColumn = this.string(`${name}_type`);
-    typeColumn.nullable = true;
+    (typeColumn as any)._nullable = true;
     
     this.index([`${name}_id`, `${name}_type`], indexName);
   }
@@ -329,7 +383,7 @@ export class Blueprint {
    */
   softDeletes(column: string = 'deleted_at'): ColumnDefinition {
     const col = this.timestamp(column);
-    col.nullable = true;
+    (col as any)._nullable = true;
     return col;
   }
 
@@ -338,7 +392,7 @@ export class Blueprint {
    */
   rememberToken(): ColumnDefinition {
     const col = this.string('remember_token', 100);
-    col.nullable = true;
+    (col as any)._nullable = true;
     return col;
   }
 
@@ -375,9 +429,9 @@ export class Blueprint {
    */
   timestamps(): void {
     const createdAt = this.timestamp('created_at');
-    createdAt.nullable = true;
+    (createdAt as any)._nullable = true;
     const updatedAt = this.timestamp('updated_at');
-    updatedAt.nullable = true;
+    (updatedAt as any)._nullable = true;
   }
 
   /**

@@ -687,8 +687,9 @@ export class Grammar {
       return `${having.boolean} ${this.wrap(having.column)} ${not}between ? and ?`;
     }
 
-    // Basic having
-    const column = this.wrap(having.column);
+    // Basic having - check if column looks like a function call (contains parentheses)
+    // If so, don't wrap it (it's already a raw expression like COUNT(*))
+    const column = having.column.includes('(') ? having.column : this.wrap(having.column);
     return `${having.boolean} ${column} ${having.operator} ?`;
   }
 

@@ -35,6 +35,7 @@ export class Model {
   protected attributes: Record<string, any> = {};
   protected original: Record<string, any> = {};
   protected relations: Record<string, any> = {};
+  protected changes: Record<string, any> = {}; // Track changes from last save
   protected exists = false;
   protected wasRecentlyCreated = false;
   
@@ -211,6 +212,47 @@ export class Model {
     if (this.relations[key] !== undefined) {
       return this.relations[key];
     }
+  }
+
+  /**
+   * Get the value of an attribute before it was changed
+   */
+  getOriginal(key?: string): any {
+    if (key === undefined) {
+      return { ...this.original };
+    }
+    return this.original[key];
+  }
+
+  /**
+   * Get a subset of the model's attributes
+   */
+  only(...attributes: string[]): Record<string, any> {
+    const result: Record<string, any> = {};
+    const attrs = attributes.flat();
+    
+    for (const attr of attrs) {
+      const value = this.getAttribute(attr);
+      if (value !== undefined) {
+        result[attr] = value;
+      }
+    }
+    
+    return result;
+  }
+
+  /**
+   * Get all the model's attributes except the given ones
+   */
+  except(...attributes: string[]): Record<string, any> {
+    const result = { ...this.attributes };
+    const attrs = attributes.flat();
+    
+    for (const attr of attrs) {
+      delete result[attr];
+    }
+    
+    return result;
   }
 
   /**
@@ -392,6 +434,8 @@ export class Model {
    * Sync the original attributes with the current
    */
   syncOriginal(): this {
+    // Store changes before syncing
+    this.changes = this.getDirty();
     this.original = { ...this.attributes };
     return this;
   }
@@ -454,6 +498,24 @@ export class Model {
    */
   isClean(...attributes: string[]): boolean {
     return !this.isDirty(...attributes);
+  }
+
+  /**
+   * Determine if the model or given attribute(s) were changed when last saved
+   */
+  wasChanged(...attributes: string[]): boolean {
+    if (attributes.length === 0) {
+      return Object.keys(this.changes).length > 0;
+    }
+
+    return attributes.some(attr => this.changes[attr] !== undefined);
+  }
+
+  /**
+   * Get the attributes that were changed when last saved
+   */
+  getChanges(): Record<string, any> {
+    return { ...this.changes };
   }
 
   /**
@@ -544,7 +606,15 @@ export class Model {
    * Update the model's timestamps
    */
   protected updateTimestamps(): void {
-    if ((this.constructor as typeof Model).isIgnoringTimestamps()) {
+    const constructor = this.constructor as typeof Model;
+    
+    // Check if the static method exists (for ES5 compatibility)
+    if (typeof constructor.isIgnoringTimestamps !== 'function') {
+      // Fall back to checking if timestamps are disabled on this instance
+      if (!this.timestamps) {
+        return;
+      }
+    } else if (constructor.isIgnoringTimestamps()) {
       return;
     }
 
@@ -863,6 +933,13 @@ export class Model {
   }
 
   /**
+   * Convert the model instance to JSON (alias for toJSON)
+   */
+  toJson(): string {
+    return this.toJSON();
+  }
+
+  /**
    * Determine if two models have the same ID and belong to the same table
    */
   is(model: Model | null): boolean {
@@ -926,6 +1003,18 @@ export class Model {
   static all<T extends Model>(this: new (attributes?: Record<string, any>) => T, columns: string[] = ['*']): Promise<T[]> {
     const model = new this();
     return model.newQuery().get(columns);
+  }
+
+  /**
+   * Chunk the results of the query
+   */
+  static async chunk<T extends Model>(
+    this: new (attributes?: Record<string, any>) => T,
+    count: number,
+    callback: any
+  ): Promise<boolean> {
+    const model = new this();
+    return await model.newQuery().chunk(count, callback);
   }
 
   /**
@@ -1075,6 +1164,50 @@ export class Model {
   }
 
   /**
+   * Add a join clause to the query
+   */
+  static join<T extends Model>(
+    this: new (attributes?: Record<string, any>) => T,
+    table: string,
+    first: string | Function,
+    operator?: string,
+    second?: string,
+    type: string = 'inner',
+    where: boolean = false
+  ): EloquentBuilder {
+    const model = new this();
+    return model.newQuery().join(table, first, operator, second, type, where);
+  }
+
+  /**
+   * Add a left join to the query
+   */
+  static leftJoin<T extends Model>(
+    this: new (attributes?: Record<string, any>) => T,
+    table: string,
+    first: string | Function,
+    operator?: string,
+    second?: string
+  ): EloquentBuilder {
+    const model = new this();
+    return model.newQuery().leftJoin(table, first, operator, second);
+  }
+
+  /**
+   * Add a right join to the query
+   */
+  static rightJoin<T extends Model>(
+    this: new (attributes?: Record<string, any>) => T,
+    table: string,
+    first: string | Function,
+    operator?: string,
+    second?: string
+  ): EloquentBuilder {
+    const model = new this();
+    return model.newQuery().rightJoin(table, first, operator, second);
+  }
+
+  /**
    * Force the query to only return distinct results
    */
   static distinct<T extends Model>(
@@ -1221,7 +1354,7 @@ export class Model {
     const propertiesToCopy = [
       'table', 'primaryKey', 'keyType', 'incrementing', 'timestamps', 'dateFormat', 'connection',
       'fillable', 'guarded', 'hidden', 'visible', 'appends', 'casts', 'dispatchesEvents',
-      'original', 'relations', 'wasRecentlyCreated'
+      'original', 'relations', 'changes', 'wasRecentlyCreated'
     ];
     
     for (const prop of propertiesToCopy) {
@@ -1262,7 +1395,7 @@ export class Model {
         const modelProperties = [
           'table', 'primaryKey', 'keyType', 'incrementing', 'timestamps', 'dateFormat', 'connection',
           'fillable', 'guarded', 'hidden', 'visible', 'appends', 'casts', 'dispatchesEvents',
-          'attributes', 'original', 'relations', 'exists', 'wasRecentlyCreated'
+          'attributes', 'original', 'relations', 'changes', 'exists', 'wasRecentlyCreated'
         ];
         
         if (modelProperties.includes(prop as string)) {
@@ -1338,8 +1471,7 @@ export class Model {
       return null;
     }
 
-    const constructor = this.constructor as typeof Model;
-    return await (constructor as any).find(this.getKey(), columns);
+    return await this.newQuery().find(this.getKey(), columns);
   }
 
   /**

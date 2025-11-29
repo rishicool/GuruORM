@@ -274,6 +274,11 @@ export class Builder {
     // Get the relation instance
     const relation = this.getRelation(name);
     
+    // Initialize the relation on all models (sets empty collections)
+    if (typeof relation.initRelation === 'function') {
+      relation.initRelation(models, name);
+    }
+    
     // Apply constraints
     constraints(relation.getQuery());
     

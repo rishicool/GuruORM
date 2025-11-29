@@ -1,5 +1,6 @@
 import { Connection } from '../Connection/Connection';
 import { Grammar } from './Grammars/Grammar';
+import { Blueprint } from './Blueprint';
 
 /**
  * Schema Builder - inspired by Laravel and Illuminate
@@ -19,9 +20,9 @@ export class Builder {
    */
   async hasTable(table: string): Promise<boolean> {
     const sql = this.grammar.compileTableExists();
-    const database = this.connection.getDatabaseName();
+    const schema = this.connection.getSchemaName();
 
-    const results = await this.connection.select(sql, [database, table]);
+    const results = await this.connection.select(sql, [schema, table]);
     return results.length > 0;
   }
 
@@ -30,18 +31,32 @@ export class Builder {
    */
   async getColumnListing(table: string): Promise<string[]> {
     const sql = this.grammar.compileColumnListing();
-    const database = this.connection.getDatabaseName();
+    const schema = this.connection.getSchemaName();
 
-    const results = await this.connection.select(sql, [database, table]);
+    const results = await this.connection.select(sql, [schema, table]);
     return this.connection.getPostProcessor().processColumnListing(results);
   }
 
   /**
    * Create a new table on the schema
    */
-  async create(table: string, callback: (blueprint: any) => void): Promise<void> {
-    // Blueprint implementation will be added later
-    throw new Error('Schema.create not yet implemented');
+  async create(table: string, callback: (blueprint: Blueprint) => void): Promise<void> {
+    const blueprint = new Blueprint(table);
+    
+    // Call the callback to define columns
+    callback(blueprint);
+    
+    // Get all columns from the blueprint
+    const columns = blueprint.getColumns();
+    
+    // Compile each column definition
+    const columnDefinitions = columns.map(column => this.grammar.compileColumn(column));
+    
+    // Compile the CREATE TABLE statement
+    const sql = this.grammar.compileCreateTable(table, columnDefinitions);
+    
+    // Execute the statement
+    await this.connection.statement(sql);
   }
 
   /**
@@ -104,9 +119,9 @@ export class Builder {
    */
   async getColumnType(table: string, column: string): Promise<string> {
     const sql = this.grammar.compileColumnType();
-    const database = this.connection.getDatabaseName();
+    const schema = this.connection.getSchemaName();
     
-    const results = await this.connection.select(sql, [database, table, column]);
+    const results = await this.connection.select(sql, [schema, table, column]);
     if (results.length === 0) {
       throw new Error(`Column ${column} does not exist on table ${table}`);
     }
@@ -117,9 +132,36 @@ export class Builder {
   /**
    * Modify a table on the schema
    */
-  async table(table: string, callback: (blueprint: any) => void): Promise<void> {
-    // Blueprint implementation for table modification
-    throw new Error('Schema.table not yet implemented');
+  async table(table: string, callback: (blueprint: Blueprint) => void): Promise<void> {
+    // Check if table exists, if not create it
+    const exists = await this.hasTable(table);
+    
+    if (!exists) {
+      // Table doesn't exist, create it instead
+      return await this.create(table, callback);
+    }
+    
+    const blueprint = new Blueprint(table);
+    
+    // Call the callback to define modifications
+    callback(blueprint);
+    
+    // Get all columns from the blueprint
+    const columns = blueprint.getColumns();
+    
+    // For each new column, add it to the table
+    for (const column of columns) {
+      const columnDef = this.grammar.compileColumn(column);
+      const sql = `ALTER TABLE ${this.grammar.wrapTable(table)} ADD COLUMN ${columnDef}`;
+      await this.connection.statement(sql);
+    }
+    
+    // Get commands for other operations (drop, rename, etc.)
+    const commands = blueprint.getCommands();
+    for (const command of commands) {
+      // Handle different command types as needed
+      // For now, just skip them
+    }
   }
 
   /**

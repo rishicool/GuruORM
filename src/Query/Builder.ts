@@ -26,6 +26,7 @@ export class Builder {
   protected offsetValue: number | null = null;
   protected unions: any[] = [];
   protected lock: boolean | string = false;
+  protected columnAliases: Map<string, string> = new Map(); // Track column aliases
   
   // Bindings for prepared statements
   protected bindings: {
@@ -898,9 +899,12 @@ export class Builder {
       operator = '=';
     }
 
+    // Resolve column alias to original expression if it exists
+    const resolvedColumn = this.columnAliases.get(column) || column;
+
     this.havings.push({
       type: 'Basic',
-      column,
+      column: resolvedColumn,
       operator,
       value,
       boolean,
@@ -961,6 +965,15 @@ export class Builder {
   selectRaw(expression: string, bindings: any[] = []): this {
     this.columns.push(new Expression(expression));
     this.addBinding(bindings, 'select');
+    
+    // Track alias if present (e.g., "COUNT(*) as count")
+    const aliasMatch = expression.match(/\s+as\s+([a-z_][a-z0-9_]*)\s*$/i);
+    if (aliasMatch) {
+      const alias = aliasMatch[1];
+      const originalExpression = expression.substring(0, expression.toLowerCase().lastIndexOf(' as ')).trim();
+      this.columnAliases.set(alias, originalExpression);
+    }
+    
     return this;
   }
 

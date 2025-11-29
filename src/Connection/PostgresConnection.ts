@@ -13,6 +13,12 @@ export class PostgresConnection extends Connection {
 
   constructor(config: ConnectionConfig) {
     super(config);
+    
+    // Initialize grammars and processor
+    this.useDefaultQueryGrammar();
+    this.useDefaultSchemaGrammar();
+    this.useDefaultPostProcessor();
+    
     // Don't await in constructor - pool creation is synchronous
     this.pool = new Pool({
       host: this.config.host || 'localhost',
@@ -179,6 +185,13 @@ export class PostgresConnection extends Connection {
    */
   protected useDefaultSchemaGrammar(): void {
     this.schemaGrammar = new SchemaPostgresGrammar();
+  }
+
+  /**
+   * Get the schema name for PostgreSQL (always 'public' by default)
+   */
+  getSchemaName(): string {
+    return this.config.schema || 'public';
   }
 
   /**

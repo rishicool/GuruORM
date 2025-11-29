@@ -25,9 +25,7 @@ export abstract class Connection implements ConnectionInterface {
   constructor(config: ConnectionConfig) {
     this.config = config;
     this.tablePrefix = config.prefix || '';
-    this.useDefaultQueryGrammar();
-    this.useDefaultSchemaGrammar();
-    this.useDefaultPostProcessor();
+    // Note: useDefault* methods are called by child classes after super()
   }
 
   /**
@@ -315,6 +313,14 @@ export abstract class Connection implements ConnectionInterface {
    */
   getDatabaseName(): string {
     return this.config.database;
+  }
+
+  /**
+   * Get the schema name for table queries
+   * For most databases this is the database name, but PostgreSQL uses 'public' schema
+   */
+  getSchemaName(): string {
+    return this.getDatabaseName();
   }
 
   /**

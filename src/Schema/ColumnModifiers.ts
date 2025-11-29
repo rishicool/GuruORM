@@ -57,7 +57,7 @@ export function useCurrentOnUpdate(column: ColumnDefinition): ColumnDefinition {
  * Apply nullable modifier
  */
 export function nullable(column: ColumnDefinition): ColumnDefinition {
-  column.nullable = true;
+  (column as any)._nullable = true;
   return column;
 }
 
@@ -65,7 +65,7 @@ export function nullable(column: ColumnDefinition): ColumnDefinition {
  * Apply default value modifier
  */
 export function defaultValue(column: ColumnDefinition, value: any): ColumnDefinition {
-  column.default = value;
+  (column as any)._default = value;
   return column;
 }
 
@@ -73,7 +73,7 @@ export function defaultValue(column: ColumnDefinition, value: any): ColumnDefini
  * Apply unsigned modifier
  */
 export function unsigned(column: ColumnDefinition): ColumnDefinition {
-  column.unsigned = true;
+  (column as any)._unsigned = true;
   return column;
 }
 
@@ -81,7 +81,7 @@ export function unsigned(column: ColumnDefinition): ColumnDefinition {
  * Apply unique constraint
  */
 export function unique(column: ColumnDefinition): ColumnDefinition {
-  column.unique = true;
+  (column as any)._unique = true;
   return column;
 }
 
@@ -89,7 +89,7 @@ export function unique(column: ColumnDefinition): ColumnDefinition {
  * Apply index
  */
 export function index(column: ColumnDefinition): ColumnDefinition {
-  column.index = true;
+  (column as any)._index = true;
   return column;
 }
 
@@ -97,7 +97,7 @@ export function index(column: ColumnDefinition): ColumnDefinition {
  * Apply primary key
  */
 export function primary(column: ColumnDefinition): ColumnDefinition {
-  column.primary = true;
+  (column as any)._primary = true;
   return column;
 }
 
@@ -105,7 +105,7 @@ export function primary(column: ColumnDefinition): ColumnDefinition {
  * Add comment to column
  */
 export function comment(column: ColumnDefinition, text: string): ColumnDefinition {
-  column.comment = text;
+  (column as any)._comment = text;
   return column;
 }
 
@@ -113,7 +113,7 @@ export function comment(column: ColumnDefinition, text: string): ColumnDefinitio
  * Place column after another column (MySQL)
  */
 export function after(column: ColumnDefinition, columnName: string): ColumnDefinition {
-  column.after = columnName;
+  (column as any)._after = columnName;
   return column;
 }
 
@@ -121,7 +121,7 @@ export function after(column: ColumnDefinition, columnName: string): ColumnDefin
  * Place column first in table (MySQL)
  */
 export function first(column: ColumnDefinition): ColumnDefinition {
-  column.first = true;
+  (column as any)._first = true;
   return column;
 }
 
@@ -129,7 +129,7 @@ export function first(column: ColumnDefinition): ColumnDefinition {
  * Set charset for column (MySQL)
  */
 export function charset(column: ColumnDefinition, charsetName: string): ColumnDefinition {
-  column.charset = charsetName;
+  (column as any)._charset = charsetName;
   return column;
 }
 
@@ -137,7 +137,7 @@ export function charset(column: ColumnDefinition, charsetName: string): ColumnDe
  * Set collation for column
  */
 export function collation(column: ColumnDefinition, collationName: string): ColumnDefinition {
-  column.collation = collationName;
+  (column as any)._collation = collationName;
   return column;
 }
 

@@ -58,9 +58,11 @@ export class PostgresGrammar extends Grammar {
       return `${having.boolean} ${this.wrap(having.column)} ${not}between ${min} and ${max}`;
     }
 
-    // Basic having clause
+    // Basic having clause - check if column looks like a function call (contains parentheses)
+    // If so, don't wrap it (it's already a raw expression like COUNT(*))
+    const column = having.column.includes('(') ? having.column : this.wrap(having.column);
     const value = this.parameter(having.value);
-    return `${having.boolean} ${this.wrap(having.column)} ${having.operator} ${value}`;
+    return `${having.boolean} ${column} ${having.operator} ${value}`;
   }
 
   /**

@@ -153,4 +153,122 @@ export class Grammar {
   compileModifyColumn(table: string, column: string): string {
     return `alter table ${this.wrapTable(table)} modify ${column}`;
   }
+
+  /**
+   * Compile a column definition from a ColumnDefinition object
+   */
+  compileColumn(column: any): string {
+    let sql = `${this.wrap(column.name)} ${this.getType(column)}`;
+
+    // Add modifiers - check both underscore-prefixed and regular properties
+    const nullable = column._nullable !== undefined ? column._nullable : (typeof column.nullable === 'boolean' ? column.nullable : undefined);
+    const primary = column._primary !== undefined ? column._primary : (typeof column.primary === 'boolean' ? column.primary : false);
+    const unique = column._unique !== undefined ? column._unique : (typeof column.unique === 'boolean' ? column.unique : false);
+    const defaultVal = column._default !== undefined ? column._default : column.default;
+    const comment = column._comment !== undefined ? column._comment : (typeof column.comment === 'string' ? column.comment : undefined);
+    
+    if (nullable === false || primary || column.autoIncrement) {
+      sql += ' not null';
+    } else if (nullable) {
+      sql += ' null';
+    }
+
+    if (column.autoIncrement) {
+      sql += ' auto_increment';
+    }
+
+    if (primary) {
+      sql += ' primary key';
+    }
+
+    if (unique) {
+      sql += ' unique';
+    }
+
+    if (defaultVal !== undefined && defaultVal !== null) {
+      sql += ` default ${this.wrapDefaultValue(defaultVal)}`;
+    }
+
+    if (comment) {
+      sql += ` comment '${comment}'`;
+    }
+
+    return sql;
+  }
+
+  /**
+   * Get the SQL type for a column
+   */
+  protected getType(column: any): string {
+    const type = column.type.toLowerCase();
+
+    switch (type) {
+      case 'increments':
+        return 'int unsigned';
+      case 'bigincrements':
+        return 'bigint unsigned';
+      case 'string':
+      case 'varchar':
+        return `varchar(${column.length || 255})`;
+      case 'text':
+        return 'text';
+      case 'mediumtext':
+        return 'mediumtext';
+      case 'longtext':
+        return 'longtext';
+      case 'integer':
+      case 'int':
+        return column.unsigned ? 'int unsigned' : 'int';
+      case 'biginteger':
+      case 'bigint':
+        return column.unsigned ? 'bigint unsigned' : 'bigint';
+      case 'tinyinteger':
+      case 'tinyint':
+        return column.unsigned ? 'tinyint unsigned' : 'tinyint';
+      case 'smallinteger':
+      case 'smallint':
+        return column.unsigned ? 'smallint unsigned' : 'smallint';
+      case 'mediuminteger':
+      case 'mediumint':
+        return column.unsigned ? 'mediumint unsigned' : 'mediumint';
+      case 'float':
+        return column.precision ? `float(${column.precision}, ${column.scale || 2})` : 'float';
+      case 'double':
+        return column.precision ? `double(${column.precision}, ${column.scale || 2})` : 'double';
+      case 'decimal':
+        return `decimal(${column.precision || 8}, ${column.scale || 2})`;
+      case 'boolean':
+        return 'tinyint(1)';
+      case 'date':
+        return 'date';
+      case 'datetime':
+        return 'datetime';
+      case 'timestamp':
+        return 'timestamp';
+      case 'time':
+        return 'time';
+      case 'year':
+        return 'year';
+      case 'char':
+        return `char(${column.length || 255})`;
+      case 'binary':
+        return 'blob';
+      case 'enum':
+        return `enum(${column.allowed.map((v: string) => `'${v}'`).join(', ')})`;
+      case 'json':
+        return 'json';
+      default:
+        return type;
+    }
+  }
+
+  /**
+   * Wrap a default value
+   */
+  protected wrapDefaultValue(value: any): string {
+    if (typeof value === 'string') {
+      return `'${value.replace(/'/g, "''")}'`;
+    }
+    return String(value);
+  }
 }

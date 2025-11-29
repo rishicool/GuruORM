@@ -39,7 +39,7 @@ export class HasMany extends Relation {
    */
   initRelation(models: Model[], relation: string): Model[] {
     for (const model of models) {
-      model['relations'][relation] = new Collection([]);
+      model['relations'][relation] = new Collection();
     }
     return models;
   }
