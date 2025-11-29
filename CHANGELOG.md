@@ -5,6 +5,32 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.6.2] - 2025-11-29
+
+### Added
+- **PostgreSQL Driver** - Full implementation with pg package
+  - Connection pooling
+  - Query execution (select, insert, update, delete)
+  - Transaction support (BEGIN, COMMIT, ROLLBACK)
+  - Prepared statements with bindings
+  
+- **SQLite Driver** - Full implementation with better-sqlite3 (optional)
+  - Synchronous API wrapped in async
+  - In-memory and file-based databases
+  - Transaction support
+  - Dynamic import for optional dependency
+  
+- **SQL Server Driver** - Full implementation with tedious package
+  - Connection pooling
+  - Parameterized queries (@p0, @p1 style)
+  - Transaction support
+  - TrustServerCertificate support
+
+### Fixed
+- All database drivers now extend Connection properly
+- setName() method available on all connection types
+- Optional dependency handling for better-sqlite3
+
 ## [1.6.1] - 2025-11-29
 
 ### Updated
