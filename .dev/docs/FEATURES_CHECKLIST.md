@@ -110,9 +110,12 @@
 - ❌ `whereJsonLength()` - JSON length
 - ❌ Update JSON columns
 
-### Unions
-- ✅ `union()` - Union queries
-- ✅ `unionAll()` - Union all
+### Subquery Support
+- ✅ `selectSub()` - Subquery in SELECT ✨ NEW
+- ✅ `fromSub()` - Subquery as FROM table ✨ NEW
+- ✅ `joinSub()` - JOIN with subquery ✨ NEW
+- ✅ `leftJoinSub()` - LEFT JOIN with subquery ✨ NEW
+- ✅ `whereSub()` - WHERE with subquery
 
 ### Locks
 - ✅ `sharedLock()` - Shared lock (FOR SHARE)
@@ -171,9 +174,9 @@
 - ✅ `findMany()` - Find multiple IDs
 - ✅ `first()` / `firstOrFail()` - Get first
 - ✅ `firstOr()` - First or callback
-- ✅ `firstOrCreate()` - First or create
-- ✅ `firstOrNew()` - First or new instance
-- ✅ `updateOrCreate()` - Update or create
+- ✅ `firstOrCreate()` - First or create ✨ NEW
+- ✅ `firstOrNew()` - First or new instance ✨ NEW
+- ✅ `updateOrCreate()` - Update or create ✨ NEW
 - ✅ Query builder methods on models
 
 ### Saving Models

@@ -708,6 +708,16 @@ export class Grammar {
   }
 
   /**
+   * Compile an insert using statement into SQL
+   */
+  compileInsertUsing(query: Builder, columns: string[], subquery: string): string {
+    const table = this.wrapTable(query['fromTable'] || '');
+    const columnList = columns.map(col => this.wrap(col)).join(', ');
+    
+    return `insert into ${table} (${columnList}) ${subquery}`;
+  }
+
+  /**
    * Compile an upsert statement into SQL
    */
   compileUpsert(query: Builder, values: any[], uniqueBy: string[], update?: string[]): string {

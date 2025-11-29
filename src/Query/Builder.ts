@@ -74,6 +74,27 @@ export class Builder {
   }
 
   /**
+   * Add a subquery as a select column
+   */
+  selectSub(query: Builder | Function, as: string): this {
+    let subQuery: Builder;
+
+    if (typeof query === 'function') {
+      subQuery = this.newQuery();
+      query(subQuery);
+    } else {
+      subQuery = query;
+    }
+
+    const sql = `(${subQuery.toSql()}) as ${this.grammar.wrap(as)}`;
+    
+    this.columns.push(new Expression(sql));
+    this.addBinding(subQuery.getBindings(), 'select');
+
+    return this;
+  }
+
+  /**
    * Set the table which the query is targeting
    */
   from(table: string, as?: string): this {
@@ -81,6 +102,28 @@ export class Builder {
     if (as) {
       this.fromAlias = as;
     }
+    return this;
+  }
+
+  /**
+   * Set a subquery as the from clause
+   */
+  fromSub(query: Builder | Function, as: string): this {
+    let subQuery: Builder;
+
+    if (typeof query === 'function') {
+      subQuery = this.newQuery();
+      query(subQuery);
+    } else {
+      subQuery = query;
+    }
+
+    const sql = `(${subQuery.toSql()})`;
+    
+    this.fromTable = new Expression(sql) as any;
+    this.fromAlias = as;
+    this.addBinding(subQuery.getBindings(), 'from');
+
     return this;
   }
 
@@ -126,6 +169,33 @@ export class Builder {
   crossJoin(table: string): this {
     this.joins.push({ type: 'cross', table });
     return this;
+  }
+
+  /**
+   * Join a subquery to the query
+   */
+  joinSub(query: Builder | Function, as: string, first: string, operator?: string, second?: string, type: 'inner' | 'left' | 'right' = 'inner'): this {
+    let subQuery: Builder;
+
+    if (typeof query === 'function') {
+      subQuery = this.newQuery();
+      query(subQuery);
+    } else {
+      subQuery = query;
+    }
+
+    const expression = `(${subQuery.toSql()}) as ${this.grammar.wrap(as)}`;
+    
+    this.addBinding(subQuery.getBindings(), 'join');
+    
+    return this.join(expression as any, first, operator, second, type);
+  }
+
+  /**
+   * Left join a subquery to the query
+   */
+  leftJoinSub(query: Builder | Function, as: string, first: string, operator?: string, second?: string): this {
+    return this.joinSub(query, as, first, operator, second, 'left');
   }
 
   /**
@@ -1129,6 +1199,24 @@ export class Builder {
   }
 
   /**
+   * Execute the query and get a single result or throw an exception
+   * Throws if no results or more than one result found
+   */
+  async sole(columns: string[] = ['*']): Promise<any> {
+    const results = await this.take(2).get(columns);
+    
+    if (results.length === 0) {
+      throw new Error('No query results for model.');
+    }
+
+    if (results.length > 1) {
+      throw new Error('Multiple records found, but expected only one.');
+    }
+
+    return results[0];
+  }
+
+  /**
    * Find a record by its primary key
    */
   async find(id: any, columns: string[] = ['*']): Promise<any> {
@@ -1219,6 +1307,25 @@ export class Builder {
     const bindings = this.grammar.prepareBindingsForInsert(this.bindings, valuesArray);
 
     return this.connection.affectingStatement(sql, bindings);
+  }
+
+  /**
+   * Insert records using a subquery
+   */
+  async insertUsing(columns: string[], query: Builder | Function): Promise<boolean> {
+    let subQuery: Builder;
+
+    if (typeof query === 'function') {
+      subQuery = this.newQuery();
+      query(subQuery);
+    } else {
+      subQuery = query;
+    }
+
+    const sql = this.grammar.compileInsertUsing(this, columns, subQuery.toSql());
+    const bindings = [...this.bindings.select, ...subQuery.getBindings()];
+
+    return this.connection.insert(sql, bindings);
   }
 
   /**

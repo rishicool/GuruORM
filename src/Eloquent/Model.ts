@@ -582,6 +582,50 @@ export class Model {
   }
 
   /**
+   * Get the first record matching the attributes or instantiate it
+   */
+  static async firstOrNew(attributes: Record<string, any>, values: Record<string, any> = {}): Promise<any> {
+    const instance = await this.query().where(attributes).first();
+    
+    if (instance) {
+      return instance;
+    }
+
+    return new this({ ...attributes, ...values });
+  }
+
+  /**
+   * Get the first record matching the attributes or create it
+   */
+  static async firstOrCreate(attributes: Record<string, any>, values: Record<string, any> = {}): Promise<any> {
+    const instance = await this.query().where(attributes).first();
+    
+    if (instance) {
+      return instance;
+    }
+
+    const model = new this({ ...attributes, ...values });
+    await model.save();
+    return model;
+  }
+
+  /**
+   * Create or update a record matching the attributes, and fill it with values
+   */
+  static async updateOrCreate(attributes: Record<string, any>, values: Record<string, any> = {}): Promise<any> {
+    const instance = await this.query().where(attributes).first();
+    
+    if (instance) {
+      await instance.fill(values).save();
+      return instance;
+    }
+
+    const model = new this({ ...attributes, ...values });
+    await model.save();
+    return model;
+  }
+
+  /**
    * Execute a callback without timestamps being updated
    */
   static async withoutTimestamps<T>(callback: () => T | Promise<T>): Promise<T> {
@@ -1781,6 +1825,16 @@ export class Model {
     }
 
     const modelClass = this.constructor.name;
+    
+    // Call observers first
+    const { ObserverRegistry } = require('./Observer');
+    const observerResult = await ObserverRegistry.callObservers(modelClass, event, this);
+    
+    if (observerResult === false && halt) {
+      return false;
+    }
+
+    // Then fire regular events
     return Events.fire(modelClass, event, this);
   }
 
@@ -1967,5 +2021,21 @@ export class Model {
    */
   static retrieved(handler: (model: any) => void | Promise<void> | boolean | Promise<boolean>): void {
     Events.listen(this.name, 'retrieved', handler);
+  }
+
+  /**
+   * Register an observer with the model
+   */
+  static observe(observer: any): void {
+    const { ObserverRegistry } = require('./Observer');
+    ObserverRegistry.observe(this.name, observer);
+  }
+
+  /**
+   * Clear all observers for the model
+   */
+  static clearObservers(): void {
+    const { ObserverRegistry } = require('./Observer');
+    ObserverRegistry.clearObservers(this.name);
   }
 }

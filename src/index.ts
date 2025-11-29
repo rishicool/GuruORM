@@ -20,6 +20,7 @@ export { Builder as EloquentBuilder } from './Eloquent/Builder';
 export { Collection as EloquentCollection } from './Eloquent/Collection';
 export { Events, EventHandler } from './Eloquent/Events';
 export { Scope, SoftDeletingScope, HasGlobalScopes } from './Eloquent/Scope';
+export { Observer, ObserverRegistry } from './Eloquent/Observer';
 
 // Model Concerns
 export { SoftDeleteModel } from './Eloquent/Concerns/SoftDeletes';
