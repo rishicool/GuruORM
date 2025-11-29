@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.6.3] - 2025-11-29
+
+### Fixed
+- SQLite async constructor issue - connection now properly initialized on first query
+- SQL Server async constructor issue - connection promise handled correctly
+- All database drivers now ensure connection before executing queries
+
+### Added
+- DATABASE.md - Comprehensive guide for all database drivers
+- Example files for MySQL, PostgreSQL, SQLite, and SQL Server testing
+
 ## [1.6.2] - 2025-11-29
 
 ### Added
