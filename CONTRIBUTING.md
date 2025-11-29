@@ -10,7 +10,7 @@ Please be respectful and constructive in all interactions with the community.
 
 ### Reporting Bugs
 
-- Check if the bug has already been reported in [Issues](https://github.com/yourusername/guruorm/issues)
+- Check if the bug has already been reported in [Issues](https://github.com/rishicool/guruorm/issues)
 - Create a new issue with a clear title and description
 - Include code samples, error messages, and steps to reproduce
 
@@ -36,7 +36,7 @@ Please be respectful and constructive in all interactions with the community.
 
 ```bash
 # Clone your fork
-git clone https://github.com/yourusername/guruorm.git
+git clone https://github.com/rishicool/guruorm.git
 cd guruorm
 
 # Install dependencies

@@ -273,6 +273,13 @@ export class Builder {
   }
 
   /**
+   * Add an "or where not in" clause to the query
+   */
+  orWhereNotIn(column: string, values: any[]): this {
+    return this.whereIn(column, values, 'or', true);
+  }
+
+  /**
    * Add a "where null" clause to the query
    */
   whereNull(column: string, boolean: 'and' | 'or' = 'and', not = false): this {
@@ -299,6 +306,13 @@ export class Builder {
    */
   whereNotNull(column: string, boolean: 'and' | 'or' = 'and'): this {
     return this.whereNull(column, boolean, true);
+  }
+
+  /**
+   * Add an "or where not null" clause to the query
+   */
+  orWhereNotNull(column: string): this {
+    return this.whereNotNull(column, 'or');
   }
 
   /**
@@ -379,6 +393,20 @@ export class Builder {
   }
 
   /**
+   * Add an "or where exists" clause to the query
+   */
+  orWhereExists(callback: ((query: Builder) => void) | Builder): this {
+    return this.whereExists(callback, 'or');
+  }
+
+  /**
+   * Add an "or where not exists" clause to the query
+   */
+  orWhereNotExists(callback: (query: Builder) => void): this {
+    return this.whereExists(callback, 'or', true);
+  }
+
+  /**
    * Add a where between clause
    */
   whereBetween(column: string, values: [any, any], boolean: 'and' | 'or' = 'and', not = false): this {
@@ -400,6 +428,20 @@ export class Builder {
    */
   whereNotBetween(column: string, values: [any, any], boolean: 'and' | 'or' = 'and'): this {
     return this.whereBetween(column, values, boolean, true);
+  }
+
+  /**
+   * Add an "or where between" clause to the query
+   */
+  orWhereBetween(column: string, values: [any, any]): this {
+    return this.whereBetween(column, values, 'or');
+  }
+
+  /**
+   * Add an "or where not between" clause to the query
+   */
+  orWhereNotBetween(column: string, values: [any, any]): this {
+    return this.whereBetween(column, values, 'or', true);
   }
 
   /**
@@ -445,6 +487,305 @@ export class Builder {
   }
 
   /**
+   * Add a \"where date is today\" clause to the query
+   */
+  whereToday(column: string, boolean: 'and' | 'or' = 'and'): this {
+    const today = new Date().toISOString().split('T')[0];
+    return this.whereDate(column, '=', today, boolean);
+  }
+
+  /**
+   * Add a \"where date is before today\" clause to the query
+   */
+  whereBeforeToday(column: string, boolean: 'and' | 'or' = 'and'): this {
+    const today = new Date().toISOString().split('T')[0];
+    return this.whereDate(column, '<', today, boolean);
+  }
+
+  /**
+   * Add a \"where date is after today\" clause to the query
+   */
+  whereAfterToday(column: string, boolean: 'and' | 'or' = 'and'): this {
+    const today = new Date().toISOString().split('T')[0];
+    return this.whereDate(column, '>', today, boolean);
+  }
+
+  /**
+   * Add a \"where date is today or before\" clause to the query
+   */
+  whereTodayOrBefore(column: string, boolean: 'and' | 'or' = 'and'): this {
+    const today = new Date().toISOString().split('T')[0];
+    return this.whereDate(column, '<=', today, boolean);
+  }
+
+  /**
+   * Add a \"where date is today or after\" clause to the query
+   */
+  whereTodayOrAfter(column: string, boolean: 'and' | 'or' = 'and'): this {
+    const today = new Date().toISOString().split('T')[0];
+    return this.whereDate(column, '>=', today, boolean);
+  }
+
+  /**
+   * Add a where day clause
+   */
+  whereDay(column: string, operator: string, value?: any, boolean: 'and' | 'or' = 'and'): this {
+    if (value === undefined) {
+      value = operator;
+      operator = '=';
+    }
+
+    this.wheres.push({
+      type: 'Day',
+      column,
+      operator,
+      value,
+      boolean,
+    });
+
+    this.addBinding(value, 'where');
+    return this;
+  }
+
+  /**
+   * Add a where month clause
+   */
+  whereMonth(column: string, operator: string, value?: any, boolean: 'and' | 'or' = 'and'): this {
+    if (value === undefined) {
+      value = operator;
+      operator = '=';
+    }
+
+    this.wheres.push({
+      type: 'Month',
+      column,
+      operator,
+      value,
+      boolean,
+    });
+
+    this.addBinding(value, 'where');
+    return this;
+  }
+
+  /**
+   * Add a where year clause
+   */
+  whereYear(column: string, operator: string, value?: any, boolean: 'and' | 'or' = 'and'): this {
+    if (value === undefined) {
+      value = operator;
+      operator = '=';
+    }
+
+    this.wheres.push({
+      type: 'Year',
+      column,
+      operator,
+      value,
+      boolean,
+    });
+
+    this.addBinding(value, 'where');
+    return this;
+  }
+
+  /**
+   * Add a "where JSON contains" clause to the query
+   */
+  whereJsonContains(column: string, value: any, boolean: 'and' | 'or' = 'and', not = false): this {
+    const type = not ? 'JsonDoesntContain' : 'JsonContains';
+
+    this.wheres.push({
+      type,
+      column,
+      value,
+      boolean,
+    });
+
+    this.addBinding(value, 'where');
+    return this;
+  }
+
+  /**
+   * Add a "where JSON doesn't contain" clause to the query
+   */
+  whereJsonDoesntContain(column: string, value: any, boolean: 'and' | 'or' = 'and'): this {
+    return this.whereJsonContains(column, value, boolean, true);
+  }
+
+  /**
+   * Add a "where JSON length" clause to the query
+   */
+  whereJsonLength(column: string, operator: string, value?: any, boolean: 'and' | 'or' = 'and'): this {
+    if (value === undefined) {
+      value = operator;
+      operator = '=';
+    }
+
+    this.wheres.push({
+      type: 'JsonLength',
+      column,
+      operator,
+      value,
+      boolean,
+    });
+
+    this.addBinding(value, 'where');
+    return this;
+  }
+
+  /**
+   * Add a full text search clause to the query
+   */
+  whereFullText(columns: string | string[], value: string, boolean: 'and' | 'or' = 'and'): this {
+    const type = 'FullText';
+    
+    this.wheres.push({
+      type,
+      columns: Array.isArray(columns) ? columns : [columns],
+      value,
+      boolean,
+    });
+
+    this.addBinding(value, 'where');
+    return this;
+  }
+
+  /**
+   * Add an "or where full text" clause to the query
+   */
+  orWhereFullText(columns: string | string[], value: string): this {
+    return this.whereFullText(columns, value, 'or');
+  }
+
+  /**
+   * Add a "where like" clause to the query
+   */
+  whereLike(column: string, value: string, boolean: 'and' | 'or' = 'and', not = false): this {
+    const type = not ? 'NotLike' : 'Like';
+
+    this.wheres.push({
+      type,
+      column,
+      value,
+      boolean,
+    });
+
+    this.addBinding(value, 'where');
+    return this;
+  }
+
+  /**
+   * Add an "or where like" clause to the query
+   */
+  orWhereLike(column: string, value: string): this {
+    return this.whereLike(column, value, 'or');
+  }
+
+  /**
+   * Add a "where not like" clause to the query
+   */
+  whereNotLike(column: string, value: string, boolean: 'and' | 'or' = 'and'): this {
+    return this.whereLike(column, value, boolean, true);
+  }
+
+  /**
+   * Add an "or where not like" clause to the query
+   */
+  orWhereNotLike(column: string, value: string): this {
+    return this.whereLike(column, value, 'or', true);
+  }
+
+  /**
+   * Add a where clause for any of the given columns
+   */
+  whereAny(columns: string[], operator: any, value?: any, boolean: 'and' | 'or' = 'and'): this {
+    return this.whereNested((query: Builder) => {
+      for (const column of columns) {
+        query.orWhere(column, operator, value);
+      }
+    }, boolean);
+  }
+
+  /**
+   * Add a where clause for all of the given columns
+   */
+  whereAll(columns: string[], operator: any, value?: any, boolean: 'and' | 'or' = 'and'): this {
+    return this.whereNested((query: Builder) => {
+      for (const column of columns) {
+        query.where(column, operator, value);
+      }
+    }, boolean);
+  }
+
+  /**
+   * Add a where clause that none of the given columns match
+   */
+  whereNone(columns: string[], operator: any, value?: any, boolean: 'and' | 'or' = 'and'): this {
+    return this.whereNested((query: Builder) => {
+      for (const column of columns) {
+        query.where(column, '!=', value);
+      }
+    }, boolean);
+  }
+
+  /**
+   * Add a "where not" clause to the query
+   */
+  whereNot(column: string | Function, operator?: any, value?: any): this {
+    if (typeof column === 'function') {
+      return this.whereNested(column, 'and');
+    }
+
+    if (value === undefined) {
+      value = operator;
+      operator = '=';
+    }
+
+    this.wheres.push({
+      type: 'Not',
+      column,
+      operator,
+      value,
+      boolean: 'and',
+    });
+
+    if (!(value instanceof Expression)) {
+      this.addBinding(value, 'where');
+    }
+
+    return this;
+  }
+
+  /**
+   * Add an "or where not" clause to the query
+   */
+  orWhereNot(column: string | Function, operator?: any, value?: any): this {
+    if (typeof column === 'function') {
+      return this.whereNested(column, 'or');
+    }
+
+    if (value === undefined) {
+      value = operator;
+      operator = '=';
+    }
+
+    this.wheres.push({
+      type: 'Not',
+      column,
+      operator,
+      value,
+      boolean: 'or',
+    });
+
+    if (!(value instanceof Expression)) {
+      this.addBinding(value, 'where');
+    }
+
+    return this;
+  }
+
+  /**
    * Add a where column clause
    */
   whereColumn(first: string, operator: string, second?: string, boolean: 'and' | 'or' = 'and'): this {
@@ -462,6 +803,13 @@ export class Builder {
     });
 
     return this;
+  }
+
+  /**
+   * Add an "or where column" clause to the query
+   */
+  orWhereColumn(first: string, operator: string, second?: string): this {
+    return this.whereColumn(first, operator, second, 'or');
   }
 
   /**
@@ -484,12 +832,60 @@ export class Builder {
   }
 
   /**
+   * Add an "order by" clause for a timestamp to the query
+   */
+  latest(column: string = 'created_at'): this {
+    return this.orderBy(column, 'desc');
+  }
+
+  /**
+   * Add an "order by" clause for a timestamp to the query
+   */
+  oldest(column: string = 'created_at'): this {
+    return this.orderBy(column, 'asc');
+  }
+
+  /**
+   * Put the query's results in random order
+   */
+  inRandomOrder(seed?: string): this {
+    this.orders.push({
+      type: 'Random',
+      seed,
+    });
+
+    return this;
+  }
+
+  /**
+   * Remove all existing orders and optionally add a new order
+   */
+  reorder(column?: string, direction: 'asc' | 'desc' = 'asc'): this {
+    this.orders = [];
+
+    if (column) {
+      return this.orderBy(column, direction);
+    }
+
+    return this;
+  }
+
+  /**
    * Add a "group by" clause to the query
    */
   groupBy(...groups: string[]): this {
     groups.forEach((group) => {
       this.groups.push(group);
     });
+    return this;
+  }
+
+  /**
+   * Add a raw "group by" clause to the query
+   */
+  groupByRaw(sql: string, bindings: any[] = []): this {
+    this.groups.push({ type: 'Raw', sql });
+    this.addBinding(bindings, 'groupBy');
     return this;
   }
 
@@ -536,6 +932,30 @@ export class Builder {
   }
 
   /**
+   * Add an "or having raw" clause to the query
+   */
+  orHavingRaw(sql: string, bindings: any[] = []): this {
+    return this.havingRaw(sql, bindings, 'or');
+  }
+
+  /**
+   * Add a "having between" clause to the query
+   */
+  havingBetween(column: string, values: [any, any], boolean: 'and' | 'or' = 'and', not = false): this {
+    const type = not ? 'NotBetween' : 'Between';
+
+    this.havings.push({
+      type,
+      column,
+      values,
+      boolean,
+    });
+
+    this.addBinding(values, 'having');
+    return this;
+  }
+
+  /**
    * Add a raw select expression
    */
   selectRaw(expression: string, bindings: any[] = []): this {
@@ -556,6 +976,13 @@ export class Builder {
 
     this.addBinding(bindings, 'where');
     return this;
+  }
+
+  /**
+   * Add a raw "or where" clause to the query
+   */
+  orWhereRaw(sql: string, bindings: any[] = []): this {
+    return this.whereRaw(sql, bindings, 'or');
   }
 
   /**
@@ -676,6 +1103,47 @@ export class Builder {
   }
 
   /**
+   * Execute the query and get the first result or throw an exception
+   */
+  async firstOrFail(columns: string[] = ['*']): Promise<any> {
+    const result = await this.first(columns);
+    
+    if (!result) {
+      throw new Error('No query results for model.');
+    }
+
+    return result;
+  }
+
+  /**
+   * Find a record by its primary key
+   */
+  async find(id: any, columns: string[] = ['*']): Promise<any> {
+    return this.where('id', '=', id).first(columns);
+  }
+
+  /**
+   * Find a record by its primary key or throw an exception
+   */
+  async findOrFail(id: any, columns: string[] = ['*']): Promise<any> {
+    const result = await this.find(id, columns);
+    
+    if (!result) {
+      throw new Error(`No query results for model with ID: ${id}`);
+    }
+
+    return result;
+  }
+
+  /**
+   * Get a single column's value from the first result of a query
+   */
+  async value(column: string): Promise<any> {
+    const result = await this.first([column]);
+    return result ? result[column] : null;
+  }
+
+  /**
    * Insert new records into the database
    */
   async insert(values: any[] | any): Promise<boolean> {
@@ -692,6 +1160,55 @@ export class Builder {
   }
 
   /**
+   * Insert a new record and get the value of the primary key
+   */
+  async insertGetId(values: any, sequence?: string): Promise<number> {
+    const sql = this.grammar.compileInsertGetId(this, values, sequence);
+    const bindings = this.grammar.prepareBindingsForInsert(this.bindings, [values]);
+
+    const results = await this.connection.select(sql, bindings);
+    
+    if (results && results.length > 0) {
+      const id = Object.values(results[0])[0];
+      return typeof id === 'number' ? id : parseInt(String(id), 10);
+    }
+
+    return 0;
+  }
+
+  /**
+   * Insert new records into the database, ignoring duplicates
+   */
+  async insertOrIgnore(values: any[] | any): Promise<number> {
+    if (Array.isArray(values) && values.length === 0) {
+      return 0;
+    }
+
+    const valuesArray = Array.isArray(values[0]) ? values : [values];
+    
+    const sql = this.grammar.compileInsertOrIgnore(this, valuesArray);
+    const bindings = this.grammar.prepareBindingsForInsert(this.bindings, valuesArray);
+
+    return this.connection.affectingStatement(sql, bindings);
+  }
+
+  /**
+   * Insert new records or update existing ones
+   */
+  async upsert(values: any[] | any, uniqueBy: string[], update?: string[]): Promise<number> {
+    if (Array.isArray(values) && values.length === 0) {
+      return 0;
+    }
+
+    const valuesArray = Array.isArray(values[0]) ? values : [values];
+    
+    const sql = this.grammar.compileUpsert(this, valuesArray, uniqueBy, update);
+    const bindings = this.grammar.prepareBindingsForInsert(this.bindings, valuesArray);
+
+    return this.connection.affectingStatement(sql, bindings);
+  }
+
+  /**
    * Update records in the database
    */
   async update(values: any): Promise<number> {
@@ -699,6 +1216,90 @@ export class Builder {
     const bindings = this.grammar.prepareBindingsForUpdate(this.bindings, values);
 
     return this.connection.update(sql, bindings);
+  }
+
+  /**
+   * Insert or update a record matching the attributes, and fill it with values
+   */
+  async updateOrInsert(attributes: any, values: any = {}): Promise<boolean> {
+    // Try to find existing record
+    const existing = await this.where(attributes).first();
+
+    if (existing) {
+      // Update existing record
+      if (Object.keys(values).length === 0) {
+        return true;
+      }
+
+      return (await this.where(attributes).update(values)) > 0;
+    }
+
+    // Insert new record
+    return this.insert({ ...attributes, ...values });
+  }
+
+  /**
+   * Increment a column's value by a given amount
+   */
+  async increment(column: string, amount: number = 1, extra: any = {}): Promise<number> {
+    if (amount < 0) {
+      throw new Error('Increment amount must be positive.');
+    }
+
+    const wrapped = this.grammar.wrap(column);
+    const columns = { ...extra, [column]: new Expression(`${wrapped} + ${amount}`) };
+
+    return this.update(columns);
+  }
+
+  /**
+   * Decrement a column's value by a given amount
+   */
+  async decrement(column: string, amount: number = 1, extra: any = {}): Promise<number> {
+    if (amount < 0) {
+      throw new Error('Decrement amount must be positive.');
+    }
+
+    const wrapped = this.grammar.wrap(column);
+    const columns = { ...extra, [column]: new Expression(`${wrapped} - ${amount}`) };
+
+    return this.update(columns);
+  }
+
+  /**
+   * Increment the given column's values by the given amounts
+   */
+  async incrementEach(columns: Record<string, number>, extra: any = {}): Promise<number> {
+    const updates: any = { ...extra };
+
+    for (const [column, amount] of Object.entries(columns)) {
+      if (amount < 0) {
+        throw new Error(`Increment amount for ${column} must be positive.`);
+      }
+
+      const wrapped = this.grammar.wrap(column);
+      updates[column] = new Expression(`${wrapped} + ${amount}`);
+    }
+
+    return this.update(updates);
+  }
+
+  /**
+   * Decrement the given column's values by the given amounts
+   */
+  async decrementEach(columns: Record<string, number>, extra: any = {}): Promise<number> {
+    const updates: any = { ...extra };
+
+    for (const [column, amount] of Object.entries(columns)) {
+      if (amount < 0) {
+        throw new Error(`Decrement amount for ${column} must be positive.`);
+      }
+
+      const wrapped = this.grammar.wrap(column);
+      updates[column] = new Expression(`${wrapped} - ${amount}`);
+    }
+
+    return this.update(updates);
   }
 
   /**
@@ -713,6 +1314,14 @@ export class Builder {
     const bindings = this.getBindings();
 
     return this.connection.delete(sql, bindings);
+  }
+
+  /**
+   * Run a truncate statement on the table
+   */
+  async truncate(): Promise<void> {
+    const sql = this.grammar.compileTruncate(this);
+    await this.connection.statement(sql);
   }
 
   /**
@@ -751,6 +1360,21 @@ export class Builder {
   }
 
   /**
+   * Determine if any rows exist for the current query
+   */
+  async exists(): Promise<boolean> {
+    const results = await this.select(new Expression('1')).limit(1).get();
+    return results.length > 0;
+  }
+
+  /**
+   * Determine if no rows exist for the current query
+   */
+  async doesntExist(): Promise<boolean> {
+    return !(await this.exists());
+  }
+
+  /**
    * Execute an aggregate function on the database
    */
   protected async aggregate(func: string, columns: string[] = ['*']): Promise<any> {
@@ -772,6 +1396,22 @@ export class Builder {
    */
   protected setAggregate(func: string, columns: string[]): this {
     this.columns = [{ function: func, columns }];
+    return this;
+  }
+
+  /**
+   * Add a shared lock to the query
+   */
+  sharedLock(): this {
+    this.lock = 'shared';
+    return this;
+  }
+
+  /**
+   * Add a lock for update to the query
+   */
+  lockForUpdate(): this {
+    this.lock = true;
     return this;
   }
 
@@ -865,6 +1505,85 @@ export class Builder {
       currentPage: page,
       hasMore,
     };
+  }
+
+  /**
+   * Paginate the results using cursor-based pagination
+   * More efficient for large datasets as it doesn't require counting total rows
+   */
+  async cursorPaginate(perPage: number = 15, cursor: string | null = null, cursorColumn: string = 'id'): Promise<{
+    data: any[];
+    perPage: number;
+    nextCursor: string | null;
+    prevCursor: string | null;
+    hasMore: boolean;
+  }> {
+    const originalOrders = [...this.orders];
+    
+    // Ensure we have an order by the cursor column
+    const hasOrderByCursor = this.orders.some((order: any) => order.column === cursorColumn);
+    if (!hasOrderByCursor) {
+      this.orderBy(cursorColumn, 'asc');
+    }
+
+    // Clone the query to get the direction
+    const direction = this.orders.find((o: any) => o.column === cursorColumn)?.direction || 'asc';
+
+    // Apply cursor condition if provided
+    if (cursor) {
+      const decodedCursor = this.decodeCursor(cursor);
+      const operator = direction === 'asc' ? '>' : '<';
+      this.where(cursorColumn, operator, decodedCursor);
+    }
+
+    // Get one more record to check if there are more pages
+    const results = await this.limit(perPage + 1).get();
+    const hasMore = results.length > perPage;
+
+    let nextCursor: string | null = null;
+    let prevCursor: string | null = null;
+
+    if (hasMore) {
+      results.pop(); // Remove the extra record
+    }
+
+    if (results.length > 0) {
+      const lastRecord = results[results.length - 1];
+      const firstRecord = results[0];
+      
+      if (hasMore) {
+        nextCursor = this.encodeCursor(lastRecord[cursorColumn]);
+      }
+      
+      if (cursor) {
+        prevCursor = this.encodeCursor(firstRecord[cursorColumn]);
+      }
+    }
+
+    // Restore original orders
+    this.orders = originalOrders;
+
+    return {
+      data: results,
+      perPage,
+      nextCursor,
+      prevCursor,
+      hasMore,
+    };
+  }
+
+  /**
+   * Encode a cursor value
+   */
+  protected encodeCursor(value: any): string {
+    return Buffer.from(JSON.stringify(value)).toString('base64');
+  }
+
+  /**
+   * Decode a cursor value
+   */
+  protected decodeCursor(cursor: string): any {
+    return JSON.parse(Buffer.from(cursor, 'base64').toString('utf8'));
   }
 
   /**
@@ -979,6 +1698,108 @@ export class Builder {
       if (results.length < chunkSize) {
         break;
       }
+    }
+  }
+
+  /**
+   * Apply the callback if the given "value" is (or resolves to) truthy
+   */
+  when(value: any, callback: (query: this, value: any) => void, defaultCallback?: (query: this, value: any) => void): this {
+    const condition = typeof value === 'function' ? value() : value;
+
+    if (condition) {
+      callback(this, condition);
+    } else if (defaultCallback) {
+      defaultCallback(this, condition);
+    }
+
+    return this;
+  }
+
+  /**
+   * Apply the callback if the given "value" is (or resolves to) falsy
+   */
+  unless(value: any, callback: (query: this, value: any) => void, defaultCallback?: (query: this, value: any) => void): this {
+    const condition = typeof value === 'function' ? value() : value;
+
+    if (!condition) {
+      callback(this, condition);
+    } else if (defaultCallback) {
+      defaultCallback(this, condition);
+    }
+
+    return this;
+  }
+
+  /**
+   * Dump the SQL and bindings
+   */
+  dump(): this {
+    console.log('SQL:', this.toSql());
+    console.log('Bindings:', this.getBindings());
+    return this;
+  }
+
+  /**
+   * Dump the SQL and bindings and die
+   */
+  dd(): never {
+    this.dump();
+    process.exit(1);
+  }
+
+  /**
+   * Dump the raw SQL with bindings interpolated
+   */
+  dumpRawSql(): this {
+    console.log('Raw SQL:', this.toRawSql());
+    return this;
+  }
+
+  /**
+   * Dump the raw SQL with bindings and die
+   */
+  ddRawSql(): never {
+    this.dumpRawSql();
+    process.exit(1);
+  }
+
+  /**
+   * Get the raw SQL with bindings interpolated
+   */
+  toRawSql(): string {
+    let sql = this.toSql();
+    const bindings = this.getBindings();
+    
+    for (const binding of bindings) {
+      const value = typeof binding === 'string' ? `'${binding}'` : binding;
+      sql = sql.replace('?', String(value));
+    }
+    
+    return sql;
+  }
+
+  /**
+   * Explain the query
+   */
+  async explain(): Promise<any[]> {
+    const sql = this.toSql();
+    const bindings = this.getBindings();
+    
+    return this.connection.select(`EXPLAIN ${sql}`, bindings);
+  }
+
+  /**
+   * Cursor-based iteration through query results
+   */
+  async *cursor(): AsyncGenerator<any> {
+    const sql = this.toSql();
+    const bindings = this.getBindings();
+    
+    const results = await this.connection.select(sql, bindings);
+    
+    for (const result of results) {
+      yield result;
     }
   }
 }

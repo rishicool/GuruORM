@@ -1,44 +1,743 @@
+import { Builder as QueryBuilder } from '../Query/Builder';
+import { Connection } from '../Connection/Connection';
+import { Builder as EloquentBuilder } from './Builder';
+import { Events } from './Events';
+
 /**
- * Model base class - placeholder for future implementation
- * Inspired by Laravel's Eloquent Model
+ * Model base class - inspired by Laravel's Eloquent Model
  */
 export class Model {
-  // Will be fully implemented in Phase 5
+  // Table configuration
   protected table?: string;
   protected primaryKey = 'id';
   protected keyType = 'number';
   protected incrementing = true;
   protected timestamps = true;
+  protected dateFormat?: string;
+  protected connection?: string;
+
+  // Mass assignment
   protected fillable: string[] = [];
   protected guarded: string[] = ['*'];
+
+  // Serialization
   protected hidden: string[] = [];
   protected visible: string[] = [];
+  protected appends: string[] = [];
+  
+  // Attribute casting
   protected casts: Record<string, string> = {};
+  
+  // Model state
   protected attributes: Record<string, any> = {};
+  protected original: Record<string, any> = {};
+  protected relations: Record<string, any> = {};
+  protected exists = false;
+  protected wasRecentlyCreated = false;
+
+  /**
+   * Check if the model exists in the database
+   */
+  modelExists(): boolean {
+    return this.exists;
+  }
+
+  // Timestamps
+  static CREATED_AT = 'created_at';
+  static UPDATED_AT = 'updated_at';
+
+  // Connection resolver
+  protected static resolver: any = null;
+  
+  // Event dispatcher
+  protected static dispatcher: any = null;
+
+  // Global scopes
+  protected static globalScopes: Map<string, any> = new Map();
+
+  // Booted models
+  protected static booted: Map<any, boolean> = new Map();
 
   constructor(attributes: Record<string, any> = {}) {
-    this.attributes = attributes;
+    this.syncOriginal();
+    this.fill(attributes);
+    this.bootIfNotBooted();
+  }
+
+  /**
+   * Boot the model if it hasn't been booted
+   */
+  protected bootIfNotBooted(): void {
+    const constructor = this.constructor as typeof Model;
+    if (!Model.booted.get(constructor)) {
+      Model.booted.set(constructor, true);
+      this.boot();
+    }
+  }
+
+  /**
+   * Bootstrap the model
+   */
+  protected boot(): void {
+    // Can be overridden in child classes
+  }
+
+  /**
+   * Fill the model with an array of attributes
+   */
+  fill(attributes: Record<string, any>): this {
+    for (const [key, value] of Object.entries(attributes)) {
+      if (this.isFillable(key)) {
+        this.setAttribute(key, value);
+      }
+    }
+    return this;
+  }
+
+  /**
+   * Force fill the model with an array of attributes
+   */
+  forceFill(attributes: Record<string, any>): this {
+    for (const [key, value] of Object.entries(attributes)) {
+      this.setAttribute(key, value);
+    }
+    return this;
+  }
+
+  /**
+   * Determine if the given attribute may be mass assigned
+   */
+  isFillable(key: string): boolean {
+    // If fillable is defined and not empty, check if key is in it
+    if (this.fillable.length > 0) {
+      return this.fillable.includes(key);
+    }
+
+    // Check if not guarded
+    if (this.guarded.includes('*')) {
+      return false;
+    }
+
+    return !this.guarded.includes(key);
   }
 
   /**
    * Get an attribute from the model
    */
   getAttribute(key: string): any {
-    return this.attributes[key];
+    if (!key) {
+      return;
+    }
+
+    // Check if accessor exists
+    const accessor = this.getAccessor(key);
+    if (accessor) {
+      return accessor.call(this);
+    }
+
+    // Check if attribute exists
+    if (this.attributes[key] !== undefined) {
+      return this.castAttribute(key, this.attributes[key]);
+    }
+
+    // Check if relation exists
+    if (this.relations[key] !== undefined) {
+      return this.relations[key];
+    }
   }
 
   /**
    * Set an attribute on the model
    */
-  setAttribute(key: string, value: any): void {
+  setAttribute(key: string, value: any): this {
+    // Check if mutator exists
+    const mutator = this.getMutator(key);
+    if (mutator) {
+      mutator.call(this, value);
+      return this;
+    }
+
+    // Cast the value if needed
+    if (this.hasCast(key)) {
+      value = this.castAttributeForSet(key, value);
+    }
+
     this.attributes[key] = value;
+    return this;
+  }
+
+  /**
+   * Get an accessor for the attribute
+   */
+  protected getAccessor(key: string): Function | null {
+    const method = `get${this.studly(key)}Attribute`;
+    if (typeof (this as any)[method] === 'function') {
+      return (this as any)[method];
+    }
+    return null;
+  }
+
+  /**
+   * Get a mutator for the attribute
+   */
+  protected getMutator(key: string): Function | null {
+    const method = `set${this.studly(key)}Attribute`;
+    if (typeof (this as any)[method] === 'function') {
+      return (this as any)[method];
+    }
+    return null;
+  }
+
+  /**
+   * Convert string to studly case (PascalCase)
+   */
+  protected studly(value: string): string {
+    return value
+      .split('_')
+      .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+      .join('');
+  }
+
+  /**
+   * Determine whether an attribute should be cast
+   */
+  protected hasCast(key: string): boolean {
+    return this.casts[key] !== undefined;
+  }
+
+  /**
+   * Cast an attribute to a native PHP type
+   */
+  protected castAttribute(key: string, value: any): any {
+    if (value === null) {
+      return value;
+    }
+
+    const castType: any = this.casts[key];
+    if (!castType) {
+      return value;
+    }
+
+    // Check if it's a custom cast class
+    if (typeof castType === 'object' && castType.get) {
+      return castType.get(this, key, value, this.attributes);
+    }
+
+    // Check if it's a class constructor for custom cast
+    if (typeof castType === 'function') {
+      const caster = new castType();
+      if (caster.get) {
+        return caster.get(this, key, value, this.attributes);
+      }
+    }
+
+    switch (castType) {
+      case 'int':
+      case 'integer':
+        return parseInt(value, 10);
+      case 'real':
+      case 'float':
+      case 'double':
+        return parseFloat(value);
+      case 'string':
+        return String(value);
+      case 'bool':
+      case 'boolean':
+        return Boolean(value);
+      case 'object':
+      case 'array':
+      case 'json':
+        return typeof value === 'string' ? JSON.parse(value) : value;
+      case 'collection':
+        const { Collection } = require('./Collection');
+        const arr = typeof value === 'string' ? JSON.parse(value) : value;
+        return new Collection(...(Array.isArray(arr) ? arr : [arr]));
+      case 'date':
+      case 'datetime':
+      case 'timestamp':
+        return new Date(value);
+      case 'encrypted':
+        // Basic decryption placeholder
+        try {
+          return Buffer.from(value, 'base64').toString('utf8');
+        } catch (e) {
+          return value;
+        }
+      default:
+        return value;
+    }
+  }
+
+  /**
+   * Cast an attribute for setting
+   */
+  protected castAttributeForSet(key: string, value: any): any {
+    const castType: any = this.casts[key];
+    
+    if (!castType) {
+      return value;
+    }
+
+    // Check if it's a custom cast class
+    if (typeof castType === 'object' && castType.set) {
+      return castType.set(this, key, value, this.attributes);
+    }
+
+    // Check if it's a class constructor for custom cast
+    if (typeof castType === 'function') {
+      const caster = new castType();
+      if (caster.set) {
+        return caster.set(this, key, value, this.attributes);
+      }
+    }
+
+    switch (castType) {
+      case 'int':
+      case 'integer':
+        return parseInt(value, 10);
+      case 'real':
+      case 'float':
+      case 'double':
+        return parseFloat(value);
+      case 'string':
+        return String(value);
+      case 'bool':
+      case 'boolean':
+        return Boolean(value);
+      case 'object':
+      case 'array':
+      case 'json':
+      case 'collection':
+        return typeof value === 'string' ? value : JSON.stringify(value);
+      case 'date':
+      case 'datetime':
+      case 'timestamp':
+        return value instanceof Date ? value.toISOString() : new Date(value).toISOString();
+      case 'encrypted':
+        // Basic encryption placeholder
+        return Buffer.from(String(value)).toString('base64');
+      default:
+        return value;
+    }
+  }
+
+  /**
+   * Sync the original attributes with the current
+   */
+  syncOriginal(): this {
+    this.original = { ...this.attributes };
+    return this;
+  }
+
+  /**
+   * Get the attributes that have been changed since last sync
+   */
+  getDirty(): Record<string, any> {
+    const dirty: Record<string, any> = {};
+
+    for (const [key, value] of Object.entries(this.attributes)) {
+      if (!this.originalIsEquivalent(key, value)) {
+        dirty[key] = value;
+      }
+    }
+
+    return dirty;
+  }
+
+  /**
+   * Determine if the new and old values are equivalent
+   */
+  protected originalIsEquivalent(key: string, current: any): boolean {
+    const original = this.original[key];
+    
+    if (current === original) {
+      return true;
+    }
+
+    if (current === null || original === null) {
+      return false;
+    }
+
+    return JSON.stringify(current) === JSON.stringify(original);
+  }
+
+  /**
+   * Determine if the model or given attribute(s) have been modified
+   */
+  isDirty(...attributes: string[]): boolean {
+    const dirty = this.getDirty();
+
+    if (attributes.length === 0) {
+      return Object.keys(dirty).length > 0;
+    }
+
+    return attributes.some(attr => dirty[attr] !== undefined);
+  }
+
+  /**
+   * Determine if the model or given attribute(s) have remained the same
+   */
+  isClean(...attributes: string[]): boolean {
+    return !this.isDirty(...attributes);
+  }
+
+  /**
+   * Save the model to the database
+   */
+  async save(): Promise<boolean> {
+    const query = this.newQuery();
+
+    // Fire the saving event
+    if (await this.fireModelEvent('saving') === false) {
+      return false;
+    }
+
+    // If the model exists, update it
+    if (this.exists) {
+      const saved = await this.performUpdate(query);
+      
+      if (saved) {
+        this.syncOriginal();
+      }
+
+      return saved;
+    }
+
+    // Otherwise insert a new record
+    const saved = await this.performInsert(query);
+    
+    if (saved) {
+      this.exists = true;
+      this.wasRecentlyCreated = true;
+      this.syncOriginal();
+    }
+
+    return saved;
+  }
+
+  /**
+   * Save the model without firing any events
+   */
+  async saveQuietly(): Promise<boolean> {
+    // Temporarily disable events
+    const originalEvents = (this.constructor as any).events;
+    (this.constructor as any).events = [];
+    
+    const result = await this.save();
+    
+    // Restore events
+    (this.constructor as any).events = originalEvents;
+    
+    return result;
+  }
+
+  /**
+   * Touch the model's timestamps
+   */
+  async touch(): Promise<boolean> {
+    if (!this.timestamps) {
+      return false;
+    }
+
+    this.updateTimestamps();
+    
+    return await this.save();
+  }
+
+  /**
+   * Update the model's timestamps
+   */
+  protected updateTimestamps(): void {
+    const time = new Date();
+
+    const updatedAtColumn = (this.constructor as typeof Model).UPDATED_AT;
+    if (updatedAtColumn && !this.isDirty(updatedAtColumn)) {
+      this.setAttribute(updatedAtColumn, time);
+    }
+
+    const createdAtColumn = (this.constructor as typeof Model).CREATED_AT;
+    if (!this.exists && createdAtColumn && !this.isDirty(createdAtColumn)) {
+      this.setAttribute(createdAtColumn, time);
+    }
+  }
+
+  /**
+   * Perform a model insert operation
+   */
+  protected async performInsert(query: EloquentBuilder): Promise<boolean> {
+    // Fire the creating event
+    if (await this.fireModelEvent('creating') === false) {
+      return false;
+    }
+
+    if (this.timestamps) {
+      this.updateTimestamps();
+    }
+
+    const attributes = this.attributes;
+
+    if (this.incrementing) {
+      const id = await query.insertGetId(attributes);
+      this.setAttribute(this.primaryKey, id);
+    } else {
+      await query.insert(attributes);
+    }
+
+    this.exists = true;
+    this.wasRecentlyCreated = true;
+
+    // Fire the created event
+    await this.fireModelEvent('created', false);
+
+    // Fire the saved event
+    await this.fireModelEvent('saved', false);
+
+    return true;
+  }
+
+  /**
+   * Perform a model update operation
+   */
+  protected async performUpdate(query: EloquentBuilder): Promise<boolean> {
+    const dirty = this.getDirty();
+
+    if (Object.keys(dirty).length === 0) {
+      return true;
+    }
+
+    // Fire the updating event
+    if (await this.fireModelEvent('updating') === false) {
+      return false;
+    }
+
+    if (this.timestamps) {
+      this.updateTimestamps();
+    }
+
+    const updated = await query.where(this.primaryKey, this.getKey()).update(dirty);
+
+    if (updated > 0) {
+      // Fire the updated event
+      await this.fireModelEvent('updated', false);
+
+      // Fire the saved event
+      await this.fireModelEvent('saved', false);
+    }
+
+    return updated > 0;
+  }
+
+  /**
+   * Get a fresh timestamp for the model
+   */
+  protected freshTimestamp(): Date {
+    return new Date();
+  }
+
+  /**
+   * Delete the model from the database
+   */
+  async delete(): Promise<boolean> {
+    if (!this.exists) {
+      return false;
+    }
+
+    // Fire the deleting event
+    if (await this.fireModelEvent('deleting') === false) {
+      return false;
+    }
+
+    const query = this.newQuery().where(this.primaryKey, this.getKey());
+    await query.delete();
+
+    this.exists = false;
+
+    // Fire the deleted event
+    await this.fireModelEvent('deleted', false);
+
+    return true;
+  }
+
+  /**
+   * Force delete the model (alias for delete when soft deletes not used)
+   */
+  async forceDelete(): Promise<boolean> {
+    return this.delete();
+  }
+
+  /**
+   * Get the value of the model's primary key
+   */
+  getKey(): any {
+    return this.getAttribute(this.primaryKey);
+  }
+
+  /**
+   * Get the primary key for the model
+   */
+  getKeyName(): string {
+    return this.primaryKey;
+  }
+
+  /**
+   * Get the table associated with the model
+   */
+  getTable(): string {
+    if (this.table) {
+      return this.table;
+    }
+
+    // Use class name as table name (pluralized and snake_cased)
+    const className = this.constructor.name;
+    return this.snake(className) + 's';
+  }
+
+  /**
+   * Convert string to snake_case
+   */
+  protected snake(value: string): string {
+    return value
+      .replace(/([A-Z])/g, '_$1')
+      .toLowerCase()
+      .replace(/^_/, '');
+  }
+
+  /**
+   * Get a new query builder for the model's table
+   */
+  newQuery(): EloquentBuilder {
+    const builder = new EloquentBuilder(this.newBaseQueryBuilder());
+    builder.setModel(this);
+
+    return builder;
+  }
+
+  /**
+   * Get a new query builder instance
+   */
+  protected newBaseQueryBuilder(): QueryBuilder {
+    const connection = this.getConnection();
+    return connection.query();
+  }
+
+  /**
+   * Get the database connection for the model
+   */
+  getConnection(): Connection {
+    return this.resolveConnection(this.connection);
+  }
+
+  /**
+   * Resolve a connection instance
+   */
+  protected resolveConnection(connection?: string): Connection {
+    return Model.getConnectionResolver()?.connection(connection);
+  }
+
+  /**
+   * Get the connection resolver instance
+   */
+  static getConnectionResolver(): any {
+    return Model.resolver;
+  }
+
+  /**
+   * Set the connection resolver instance
+   */
+  static setConnectionResolver(resolver: any): void {
+    Model.resolver = resolver;
   }
 
   /**
    * Convert the model instance to an array
    */
   toArray(): Record<string, any> {
-    return { ...this.attributes };
+    const array: Record<string, any> = { ...this.attributesToArray() };
+
+    // Add appended attributes
+    for (const key of this.appends) {
+      array[key] = this.getAttribute(key);
+    }
+
+    // Add relations
+    for (const [key, value] of Object.entries(this.relations)) {
+      if (value && typeof value.toArray === 'function') {
+        array[key] = value.toArray();
+      } else if (Array.isArray(value)) {
+        array[key] = value.map(item => 
+          item && typeof item.toArray === 'function' ? item.toArray() : item
+        );
+      } else {
+        array[key] = value;
+      }
+    }
+
+    return this.filterVisible(array);
+  }
+
+  /**
+   * Convert the model's attributes to an array
+   */
+  attributesToArray(): Record<string, any> {
+    const attributes: Record<string, any> = {};
+
+    for (const [key, value] of Object.entries(this.attributes)) {
+      attributes[key] = this.castAttribute(key, value);
+    }
+
+    return attributes;
+  }
+
+  /**
+   * Filter visible attributes
+   */
+  protected filterVisible(array: Record<string, any>): Record<string, any> {
+    if (this.visible.length > 0) {
+      const visible: Record<string, any> = {};
+      for (const key of this.visible) {
+        if (array[key] !== undefined) {
+          visible[key] = array[key];
+        }
+      }
+      return visible;
+    }
+
+    if (this.hidden.length > 0) {
+      const filtered: Record<string, any> = {};
+      for (const [key, value] of Object.entries(array)) {
+        if (!this.hidden.includes(key)) {
+          filtered[key] = value;
+        }
+      }
+      return filtered;
+    }
+
+    return array;
+  }
+
+  /**
+   * Make the given attributes visible
+   */
+  makeVisible(attributes: string | string[]): this {
+    const attrs = Array.isArray(attributes) ? attributes : [attributes];
+    this.hidden = this.hidden.filter(attr => !attrs.includes(attr));
+    
+    if (this.visible.length === 0) {
+      this.visible = attrs;
+    } else {
+      this.visible = [...new Set([...this.visible, ...attrs])];
+    }
+
+    return this;
+  }
+
+  /**
+   * Make the given attributes hidden
+   */
+  makeHidden(attributes: string | string[]): this {
+    const attrs = Array.isArray(attributes) ? attributes : [attributes];
+    this.hidden = [...new Set([...this.hidden, ...attrs])];
+    return this;
   }
 
   /**
@@ -46,5 +745,518 @@ export class Model {
    */
   toJSON(): string {
     return JSON.stringify(this.toArray());
+  }
+
+  /**
+   * Determine if two models have the same ID and belong to the same table
+   */
+  is(model: Model | null): boolean {
+    return model !== null &&
+      this.getKey() === model.getKey() &&
+      this.getTable() === model.getTable() &&
+      this.getConnectionName() === model.getConnectionName();
+  }
+
+  /**
+   * Determine if two models are not the same
+   */
+  isNot(model: Model | null): boolean {
+    return !this.is(model);
+  }
+
+  /**
+   * Get the database connection name
+   */
+  getConnectionName(): string | undefined {
+    return this.connection;
+  }
+
+  /**
+   * Set the connection associated with the model
+   */
+  setConnection(name: string): this {
+    this.connection = name;
+    return this;
+  }
+
+  /**
+   * Create a new instance of the model
+   */
+  static async create<T extends Model>(this: new (attributes?: Record<string, any>) => T, attributes: Record<string, any> = {}): Promise<T> {
+    const model = new this(attributes);
+    await model.save();
+    return model;
+  }
+
+  /**
+   * Find a model by its primary key
+   */
+  static async find<T extends Model>(this: new (attributes?: Record<string, any>) => T, id: any, columns: string[] = ['*']): Promise<T | null> {
+    const model = new this();
+    const builder = model.newQuery();
+    const result = await builder.find(id, columns);
+    
+    if (!result) {
+      return null;
+    }
+
+    return model.newInstance(result, true);
+  }
+
+  /**
+   * Find a model by its primary key or throw an exception
+   */
+  static async findOrFail<T extends Model>(this: new (attributes?: Record<string, any>) => T, id: any, columns: string[] = ['*']): Promise<T> {
+    const model = new this();
+    const result = await model.newQuery().findOrFail(id, columns);
+    return model.newInstance(result, true);
+  }
+
+  /**
+   * Create a new instance of the given model
+   */
+  newInstance(attributes: Record<string, any> = {}, exists = false): this {
+    const model = Object.create(Object.getPrototypeOf(this));
+    Object.assign(model, this);
+    
+    model.attributes = attributes;
+    model.exists = exists;
+    model.syncOriginal();
+
+    return model;
+  }
+
+  /**
+   * Reload the current model instance from the database
+   */
+  async fresh(columns: string[] = ['*']): Promise<this | null> {
+    if (!this.exists) {
+      return null;
+    }
+
+    const constructor = this.constructor as typeof Model;
+    return await (constructor as any).find(this.getKey(), columns);
+  }
+
+  /**
+   * Reload the model from the database
+   */
+  async refresh(): Promise<this> {
+    if (!this.exists) {
+      return this;
+    }
+
+    const fresh = await this.fresh();
+    
+    if (fresh) {
+      this.attributes = fresh.attributes;
+      this.syncOriginal();
+    }
+
+    return this;
+  }
+
+  /**
+   * Clone the model into a new, non-existing instance
+   */
+  replicate(except: string[] = []): this {
+    const attributes = { ...this.attributes };
+
+    // Remove primary key and timestamps
+    delete attributes[this.primaryKey];
+    delete attributes[(this.constructor as typeof Model).CREATED_AT];
+    delete attributes[(this.constructor as typeof Model).UPDATED_AT];
+
+    // Remove specified attributes
+    for (const key of except) {
+      delete attributes[key];
+    }
+
+    return this.newInstance(attributes, false);
+  }
+
+  /**
+   * Define a one-to-one relationship
+   */
+  hasOne(related: typeof Model, foreignKey?: string, localKey?: string): any {
+    const { HasOne } = require('./Relations/HasOne');
+    const instance = new related();
+    
+    foreignKey = foreignKey || this.getForeignKey();
+    localKey = localKey || this.getKeyName();
+
+    return new HasOne(instance.newQuery(), this, foreignKey, localKey);
+  }
+
+  /**
+   * Define a one-to-many relationship
+   */
+  hasMany(related: typeof Model, foreignKey?: string, localKey?: string): any {
+    const { HasMany } = require('./Relations/HasMany');
+    const instance = new related();
+    
+    foreignKey = foreignKey || this.getForeignKey();
+    localKey = localKey || this.getKeyName();
+
+    return new HasMany(instance.newQuery(), this, foreignKey, localKey);
+  }
+
+  /**
+   * Define an inverse one-to-one or many relationship
+   */
+  belongsTo(related: typeof Model, foreignKey?: string, ownerKey?: string): any {
+    const { BelongsTo } = require('./Relations/BelongsTo');
+    const instance = new related();
+    
+    foreignKey = foreignKey || this.snake(instance.constructor.name) + '_id';
+    ownerKey = ownerKey || instance.getKeyName();
+
+    return new BelongsTo(instance.newQuery(), this, foreignKey, ownerKey);
+  }
+
+  /**
+   * Define a many-to-many relationship
+   */
+  belongsToMany(
+    related: typeof Model,
+    table?: string,
+    foreignPivotKey?: string,
+    relatedPivotKey?: string,
+    parentKey?: string,
+    relatedKey?: string
+  ): any {
+    const { BelongsToMany } = require('./Relations/BelongsToMany');
+    const instance = new related();
+    
+    foreignPivotKey = foreignPivotKey || this.getForeignKey();
+    relatedPivotKey = relatedPivotKey || instance.getForeignKey();
+    table = table || this.joiningTable(related);
+    parentKey = parentKey || this.getKeyName();
+    relatedKey = relatedKey || instance.getKeyName();
+
+    return new BelongsToMany(
+      instance.newQuery(),
+      this,
+      table,
+      foreignPivotKey,
+      relatedPivotKey,
+      parentKey,
+      relatedKey
+    );
+  }
+
+  /**
+   * Get the foreign key name for the model
+   */
+  getForeignKey(): string {
+    return this.snake(this.constructor.name) + '_id';
+  }
+
+  /**
+   * Define a has-one-through relationship
+   */
+  hasOneThrough(
+    related: typeof Model,
+    through: typeof Model,
+    firstKey?: string,
+    secondKey?: string,
+    localKey?: string,
+    secondLocalKey?: string
+  ): any {
+    const { HasOneThrough } = require('./Relations/HasOneThrough');
+    
+    firstKey = firstKey || this.getForeignKey();
+    secondKey = secondKey || new through().getForeignKey();
+    localKey = localKey || this.primaryKey;
+    secondLocalKey = secondLocalKey || new through().primaryKey;
+
+    const instance = new related();
+    return new HasOneThrough(
+      instance.newQuery(),
+      this,
+      through,
+      firstKey,
+      secondKey,
+      localKey,
+      secondLocalKey
+    );
+  }
+
+  /**
+   * Define a has-many-through relationship
+   */
+  hasManyThrough(
+    related: typeof Model,
+    through: typeof Model,
+    firstKey?: string,
+    secondKey?: string,
+    localKey?: string,
+    secondLocalKey?: string
+  ): any {
+    const { HasManyThrough } = require('./Relations/HasManyThrough');
+    
+    firstKey = firstKey || this.getForeignKey();
+    secondKey = secondKey || new through().getForeignKey();
+    localKey = localKey || this.primaryKey;
+    secondLocalKey = secondLocalKey || new through().primaryKey;
+
+    const instance = new related();
+    return new HasManyThrough(
+      instance.newQuery(),
+      this,
+      through,
+      firstKey,
+      secondKey,
+      localKey,
+      secondLocalKey
+    );
+  }
+
+  /**
+   * Define a polymorphic one-to-one relationship
+   */
+  morphOne(
+    related: typeof Model,
+    name: string,
+    type?: string,
+    id?: string,
+    localKey?: string
+  ): any {
+    const { MorphOne } = require('./Relations/MorphOne');
+    
+    const instance = new related();
+    type = type || name + '_type';
+    id = id || name + '_id';
+    localKey = localKey || this.primaryKey;
+
+    return new MorphOne(
+      instance.newQuery(),
+      this,
+      type,
+      id,
+      localKey
+    );
+  }
+
+  /**
+   * Define a polymorphic one-to-many relationship
+   */
+  morphMany(
+    related: typeof Model,
+    name: string,
+    type?: string,
+    id?: string,
+    localKey?: string
+  ): any {
+    const { MorphMany } = require('./Relations/MorphMany');
+    
+    const instance = new related();
+    type = type || name + '_type';
+    id = id || name + '_id';
+    localKey = localKey || this.primaryKey;
+
+    return new MorphMany(
+      instance.newQuery(),
+      this,
+      type,
+      id,
+      localKey
+    );
+  }
+
+  /**
+   * Define a polymorphic inverse relationship
+   */
+  morphTo(name?: string, type?: string, id?: string): any {
+    const { MorphTo } = require('./Relations/MorphTo');
+    
+    name = name || 'morphable';
+    type = type || name + '_type';
+    id = id || name + '_id';
+
+    // Create a placeholder query - actual query built dynamically
+    return new MorphTo(
+      this.newQuery(),
+      this,
+      id,
+      type,
+      name
+    );
+  }
+
+  /**
+   * Get the joining table name for a many-to-many relation
+   */
+  protected joiningTable(related: typeof Model): string {
+    const models = [
+      this.snake(this.constructor.name),
+      this.snake(related.name)
+    ].sort();
+
+    return models.join('_');
+  }
+
+  /**
+   * Get a relationship value from a method
+   */
+  getRelationValue(key: string): any {
+    // If the relation is already loaded, return it
+    if (this.relations[key] !== undefined) {
+      return this.relations[key];
+    }
+
+    // Otherwise, try to load it
+    if (typeof (this as any)[key] === 'function') {
+      return this.getRelationshipFromMethod(key);
+    }
+  }
+
+  /**
+   * Get a relationship from a method on the model
+   */
+  protected getRelationshipFromMethod(method: string): any {
+    const relation = (this as any)[method]();
+    
+    if (relation && typeof relation.getResults === 'function') {
+      return this.relations[method] = relation.getResults();
+    }
+
+    return null;
+  }
+
+  /**
+   * Fire the given event for the model
+   */
+  protected async fireModelEvent(event: string, halt = true): Promise<boolean> {
+    const modelClass = this.constructor.name;
+    return Events.fire(modelClass, event, this);
+  }
+
+  /**
+   * Eager load relations on the model
+   */
+  async load(relations: string | string[] | Record<string, Function>): Promise<this> {
+    const relationsArray = typeof relations === 'string' ? [relations] : 
+                          Array.isArray(relations) ? relations : 
+                          Object.keys(relations);
+
+    for (const relation of relationsArray) {
+      if (typeof (this as any)[relation] === 'function') {
+        const relationInstance = (this as any)[relation]();
+        
+        if (relationInstance && typeof relationInstance.getResults === 'function') {
+          this.relations[relation] = await relationInstance.getResults();
+        }
+      }
+    }
+
+    return this;
+  }
+
+  /**
+   * Eager load relations on the model if they are not already eager loaded
+   */
+  async loadMissing(relations: string | string[]): Promise<this> {
+    const relationsArray = typeof relations === 'string' ? [relations] : relations;
+    const missing = relationsArray.filter(relation => !this.relations[relation]);
+
+    if (missing.length > 0) {
+      await this.load(missing);
+    }
+
+    return this;
+  }
+
+  /**
+   * Determine if the given relation is loaded
+   */
+  relationLoaded(key: string): boolean {
+    return this.relations[key] !== undefined;
+  }
+
+  /**
+   * Get all loaded relations for the model
+   */
+  getRelations(): Record<string, any> {
+    return this.relations;
+  }
+
+  /**
+   * Set the specific relationship in the model
+   */
+  setRelation(relation: string, value: any): this {
+    this.relations[relation] = value;
+    return this;
+  }
+
+  /**
+   * Unset a loaded relationship
+   */
+  unsetRelation(relation: string): this {
+    delete this.relations[relation];
+    return this;
+  }
+
+  /**
+   * Register a creating model event listener
+   */
+  static creating(handler: (model: any) => void | Promise<void> | boolean | Promise<boolean>): void {
+    Events.listen(this.name, 'creating', handler);
+  }
+
+  /**
+   * Register a created model event listener
+   */
+  static created(handler: (model: any) => void | Promise<void> | boolean | Promise<boolean>): void {
+    Events.listen(this.name, 'created', handler);
+  }
+
+  /**
+   * Register an updating model event listener
+   */
+  static updating(handler: (model: any) => void | Promise<void> | boolean | Promise<boolean>): void {
+    Events.listen(this.name, 'updating', handler);
+  }
+
+  /**
+   * Register an updated model event listener
+   */
+  static updated(handler: (model: any) => void | Promise<void> | boolean | Promise<boolean>): void {
+    Events.listen(this.name, 'updated', handler);
+  }
+
+  /**
+   * Register a saving model event listener
+   */
+  static saving(handler: (model: any) => void | Promise<void> | boolean | Promise<boolean>): void {
+    Events.listen(this.name, 'saving', handler);
+  }
+
+  /**
+   * Register a saved model event listener
+   */
+  static saved(handler: (model: any) => void | Promise<void> | boolean | Promise<boolean>): void {
+    Events.listen(this.name, 'saved', handler);
+  }
+
+  /**
+   * Register a deleting model event listener
+   */
+  static deleting(handler: (model: any) => void | Promise<void> | boolean | Promise<boolean>): void {
+    Events.listen(this.name, 'deleting', handler);
+  }
+
+  /**
+   * Register a deleted model event listener
+   */
+  static deleted(handler: (model: any) => void | Promise<void> | boolean | Promise<boolean>): void {
+    Events.listen(this.name, 'deleted', handler);
+  }
+
+  /**
+   * Register a retrieved model event listener
+   */
+  static retrieved(handler: (model: any) => void | Promise<void> | boolean | Promise<boolean>): void {
+    Events.listen(this.name, 'retrieved', handler);
   }
 }

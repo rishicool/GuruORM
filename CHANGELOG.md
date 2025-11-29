@@ -5,6 +5,252 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.5.0] - 2024-11-29
+
+### Added
+- **CLI Command Generators**
+  - `make:migration` - Create migration files with timestamp prefixes
+  - `make:seeder` - Create seeder class files
+  - `make:factory` - Create factory class files
+  - Support for `--create` and `--table` flags in migrations
+  - Automatic file naming and class naming conventions
+
+- **Schema Blueprint Enhancements**
+  - Index management: `index()`, `unique()`, `primary()`, `fullText()`, `spatialIndex()`
+  - Index operations: `dropIndex()`, `dropUnique()`, `dropPrimary()`, `renameIndex()`
+  - Foreign key constraints with full cascade/restrict/set null support
+  - `foreign()`, `references()`, `on()` methods
+  - `cascadeOnDelete()`, `cascadeOnUpdate()`, `restrictOnDelete()`, `restrictOnUpdate()`
+  - `nullOnDelete()`, `noActionOnDelete()`, `noActionOnUpdate()`
+  - `dropForeign()` for removing foreign keys
+
+- **Column Modifiers**
+  - Generated columns: `storedAs()`, `virtualAs()`, `generatedAs()`
+  - `invisible()` - Invisible columns (MySQL 8.0.23+)
+  - `useCurrent()`, `useCurrentOnUpdate()` - Timestamp defaults
+  - Helper methods for nullable, default, unsigned, unique, index, primary, comment, etc.
+
+- **Migration Events System**
+  - `MigrationEventDispatcher` for lifecycle hooks
+  - Events: `migrations.started`, `migrations.ended`, `migration.started`, `migration.ended`
+  - `migrations.none`, `schema.dumped`, `schema.loaded` events
+  - Event listeners and dispatchers integrated into Migrator
+
+- **Testing Utilities**
+  - `RefreshDatabase` - Refresh database before each test
+  - `DatabaseTransactions` - Wrap tests in transactions
+  - `DatabaseMigrations` - Run/rollback migrations for tests
+  - `WithTransaction` decorator for automatic transaction wrapping
+
+- **Advanced Pagination**
+  - `cursorPaginate()` - Cursor-based pagination for large datasets
+  - More efficient than offset pagination for large tables
+  - Supports forward and backward navigation
+  - Base64-encoded cursor tokens
+
+### Improved
+- CLI commands now actually generate files instead of showing placeholder messages
+- Migration file structure follows Laravel conventions
+- Seeder and Factory file generation with proper namespacing
+- Enhanced error handling in CLI commands
+
+### Fixed
+- Repository URLs updated from `yourusername` to `rishicool` across all documentation
+- Build process now includes CLI makers
+
+## [1.4.0] - 2024-11-29
+
+### Added
+- **Query Debugging Tools**
+  - `dump()` - Log SQL and bindings to console, chainable
+  - `dd()` - Dump and die (log query and exit process)
+  - `dumpRawSql()` - Display SQL with bindings interpolated
+  - `ddRawSql()` - Dump raw SQL and exit
+  - `toRawSql()` - Get SQL string with bindings replaced
+  - `explain()` - Run EXPLAIN on query for performance analysis
+
+- **Memory-Efficient Iteration**
+  - `cursor()` - AsyncGenerator for processing large result sets
+  - Generator-based approach prevents loading all records into memory
+  - Ideal for processing millions of records efficiently
+
+- **Model Convenience Methods**
+  - `saveQuietly()` - Save model without firing events
+  - `touch()` - Update only timestamps (created_at/updated_at)
+  - Consolidated timestamp management logic
+
+- **Enhanced Eloquent Collections**
+  - `find(key)` - Find model by primary key in collection
+  - `modelKeys()` - Extract array of all model primary keys
+  - `fresh()` - Reload all models from database with fresh data
+  - `contains()` - Check if collection contains model/value with operators
+  - `unique(key?)` - Get unique models by key or dedupe entire collection
+  - `diff(collection)` - Get models in this collection but not in other
+  - `intersect(collection)` - Get models present in both collections
+  - `makeVisible(attrs)` / `makeHidden(attrs)` - Toggle visibility on all models
+  - `load(relations)` - Lazy load relationships on all collection models
+  - 10+ new methods for comprehensive model collection operations
+
+### Improved
+- Collection class completely rewritten from basic placeholder to full-featured Eloquent collection
+- Better memory management with cursor-based iteration
+- Enhanced debugging capabilities for query optimization
+
+## [1.3.0] - 2024-11-29
+
+### Added
+- **Query Logging System**
+  - `QueryLogger` class for tracking database queries
+  - `DB.enableQueryLog()` / `DB.disableQueryLog()` - Toggle logging
+  - `DB.getQueryLog()` - Retrieve query history
+  - `DB.flushQueryLog()` - Clear query log
+  - Query event listeners
+  - Slow query detection
+  - Pretty print query log with statistics
+  - Total query time and count tracking
+
+- **Model Factory System**
+  - `Factory<T>` base class for generating test data
+  - `factory()` helper function
+  - `defineFactory()` for custom factory definitions
+  - `FactoryManager` for registration
+  - `times()` - Create multiple models
+  - `create()` - Create and save models
+  - `make()` - Make without saving
+  - `state()` - Apply state transformations
+  - `afterCreating()` / `afterMaking()` - Lifecycle callbacks
+
+- **Migration System**
+  - `Migrator` class for managing migrations
+  - `run()` - Execute pending migrations
+  - `rollback()` - Rollback last batch
+  - `reset()` - Reset all migrations
+  - `status()` - Check migration status
+  - Batch tracking system
+  - Migration file loading and execution
+  - Automatic migration table creation
+  - `--pretend` flag support
+  - Error handling and reporting
+
+- **Enhanced Schema Builder**
+  - `Schema::rename()` - Rename tables
+  - `Schema::hasColumn()` / `hasColumns()` - Check columns exist
+  - `Schema::getColumnType()` - Get column data type
+  - `Schema::getAllTables()` - List all tables
+  - `Schema::dropAllTables()` - Drop all tables
+  - `Schema::enableForeignKeyConstraints()`
+  - `Schema::disableForeignKeyConstraints()`
+  - `Schema::withoutForeignKeyConstraints()` - Temporary disable
+  - Grammar support for column operations: `addColumn()`, `dropColumn()`, `renameColumn()`, `modifyColumn()`
+  - `compileCreateTable()` with engine, charset, collation, comment support
+
+### Improved
+- Schema grammar with comprehensive table and column operations
+- Connection interface for migration support
+- Better error messages for schema operations
+
+## [1.2.0] - 2024-11-29
+
+### Added
+- **Relationship Query Methods**
+  - `has()`, `whereHas()` - Query models that have related records
+  - `doesntHave()`, `whereDoesntHave()` - Query models without related records
+  - `orWhereHas()`, `orWhereDoesntHave()` - OR variants of relationship existence queries
+  - `withCount()` - Eager load relationship counts as attributes
+
+- **Lazy Eager Loading**
+  - `load()` - Load relationships on an existing model instance
+  - `loadMissing()` - Load only relationships not already loaded
+  - `relationLoaded()` - Check if a relationship is loaded
+  - `getRelations()`, `setRelation()`, `unsetRelation()` - Manage loaded relations
+
+- **Custom Attribute Casting System**
+  - `CastsAttributes` interface for bidirectional custom casting
+  - Built-in custom casts:
+    - `ArrayCast` - JSON ↔ Array conversion
+    - `JsonCast` - JSON ↔ Object conversion
+    - `EncryptedCast` - Base64 encryption/decryption
+    - `AsCollectionCast` - JSON ↔ Collection conversion
+    - `AsStringableCast` - String wrapper casting
+
+- **Model Concerns/Traits**
+  - `SoftDeleteModel` - Soft delete functionality base class
+  - `UuidModel` - UUID primary key support
+  - `UlidModel` - ULID primary key support
+  - `HasUuids`, `HasUlids` - Trait classes for UUID/ULID support
+
+### Improved
+- Enhanced Model casting to support custom cast classes and instances
+- Better type safety in cast attribute methods
+- Relationship query builder with existence queries
+
+## [1.1.0] - 2024-11-29
+
+### Added
+- **Advanced Query Builder Methods**
+  - `whereAny()`, `whereAll()`, `whereNone()` - Multiple column where clauses
+  - `whereToday()`, `whereBeforeToday()`, `whereAfterToday()` - Today-based date filters
+  - `whereTodayOrBefore()`, `whereTodayOrAfter()` - Today comparison filters
+
+- **Complete Relationship System**
+  - Through relationships: `hasOneThrough()`, `hasManyThrough()`
+  - Polymorphic relationships: `morphOne()`, `morphMany()`, `morphTo()`
+  - All basic relationships: `hasOne()`, `hasMany()`, `belongsTo()`, `belongsToMany()`
+  - Full eager loading support
+
+- **Enhanced Schema Builder**
+  - 30+ new column types: `uuid()`, `ulid()`, `ipAddress()`, `macAddress()`, `geometry()`, `point()`, `polygon()`, etc.
+  - Integer variations: `tinyInteger()`, `smallInteger()`, `mediumInteger()`, `unsignedInteger()`, `unsignedBigInteger()`
+  - Text variations: `char()`, `mediumText()`, `longText()`
+  - Numeric types: `float()`, `double()`, `decimal()`
+  - Special columns: `enum()`, `set()`, `binary()`, `jsonb()`, `year()`, `time()`
+  - Helper methods: `morphs()`, `nullableMorphs()`, `uuidMorphs()`, `ulidMorphs()`, `rememberToken()`, `softDeletes()`
+
+### Improved
+- Model relationship infrastructure
+- Type safety across all relationships
+- Schema builder flexibility and completeness
+
+### Fixed
+- Relationship query building
+- Type annotations in through relationships
+
+## [1.0.7] - 2024-11-29
+
+### Added
+- **Query Builder Enhancements**
+  - Added `whereLike()`, `orWhereLike()`, `whereNotLike()`, `orWhereNotLike()` methods
+  - All WHERE clause variants (date, time, JSON, full-text)
+  - Pagination support (`paginate()`, `simplePaginate()`)
+  - Chunking and streaming (`chunk()`, `chunkById()`, `lazy()`, `lazyById()`)
+  - Advanced insert/update operations (`insertGetId()`, `insertOrIgnore()`, `upsert()`, `updateOrInsert()`)
+  - Increment/decrement operations
+  - Union operations
+  - Query locks (`sharedLock()`, `lockForUpdate()`)
+
+- **Eloquent ORM Features**
+  - Complete relationship support (HasOne, HasMany, BelongsTo, BelongsToMany)
+  - Model events system (`creating`, `created`, `updating`, `updated`, `saving`, `saved`, `deleting`, `deleted`)
+  - Event listeners and observers
+  - Global scopes support
+  - Soft delete functionality
+  - Mass assignment protection (fillable/guarded)
+  - Attribute casting
+  - Accessors and mutators
+  - Model serialization (`toArray()`, `toJson()`)
+  - Eager loading for relationships
+
+### Improved
+- Enhanced Model class with comprehensive functionality
+- Better TypeScript type safety
+- Improved error handling
+- Code organization and structure
+
+### Fixed
+- Compilation errors in relationship classes
+- Duplicate method implementations
+- Type safety issues
+
 ## [Unreleased]
 
 ### Added
@@ -33,5 +279,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - First stable release with complete feature parity with Laravel's Illuminate Database
 
-[Unreleased]: https://github.com/yourusername/guruorm/compare/v1.0.0...HEAD
-[1.0.0]: https://github.com/yourusername/guruorm/releases/tag/v1.0.0
+[Unreleased]: https://github.com/rishicool/guruorm/compare/v1.0.0...HEAD
+[1.0.0]: https://github.com/rishicool/guruorm/releases/tag/v1.0.0

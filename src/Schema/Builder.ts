@@ -69,19 +69,95 @@ export class Builder {
   }
 
   /**
+   * Determine if the given table has a given column
+   */
+  async hasColumn(table: string, column: string): Promise<boolean> {
+    const columns = await this.getColumnListing(table);
+    return columns.includes(column);
+  }
+
+  /**
+   * Determine if the given table has given columns
+   */
+  async hasColumns(table: string, columns: string[]): Promise<boolean> {
+    const tableColumns = await this.getColumnListing(table);
+    return columns.every(column => tableColumns.includes(column));
+  }
+
+  /**
+   * Get the data type for a given column
+   */
+  async getColumnType(table: string, column: string): Promise<string> {
+    const sql = this.grammar.compileColumnType();
+    const database = this.connection.getDatabaseName();
+    
+    const results = await this.connection.select(sql, [database, table, column]);
+    if (results.length === 0) {
+      throw new Error(`Column ${column} does not exist on table ${table}`);
+    }
+    
+    return results[0].data_type;
+  }
+
+  /**
+   * Modify a table on the schema
+   */
+  async table(table: string, callback: (blueprint: any) => void): Promise<void> {
+    // Blueprint implementation for table modification
+    throw new Error('Schema.table not yet implemented');
+  }
+
+  /**
+   * Drop all tables from the database
+   */
+  async dropAllTables(): Promise<void> {
+    const tables = await this.getAllTables();
+    
+    // Disable foreign key checks
+    await this.connection.statement('SET FOREIGN_KEY_CHECKS=0');
+    
+    for (const table of tables) {
+      await this.drop(table);
+    }
+    
+    // Re-enable foreign key checks
+    await this.connection.statement('SET FOREIGN_KEY_CHECKS=1');
+  }
+
+  /**
+   * Get all tables from the database
+   */
+  async getAllTables(): Promise<string[]> {
+    const sql = this.grammar.compileGetAllTables();
+    const results = await this.connection.select(sql);
+    return results.map((result: any) => Object.values(result)[0] as string);
+  }
+
+  /**
    * Enable foreign key constraints
    */
   async enableForeignKeyConstraints(): Promise<void> {
-    const sql = this.grammar.compileEnableForeignKeyConstraints();
-    await this.connection.statement(sql);
+    await this.connection.statement(this.grammar.compileEnableForeignKeyConstraints());
   }
 
   /**
    * Disable foreign key constraints
    */
   async disableForeignKeyConstraints(): Promise<void> {
-    const sql = this.grammar.compileDisableForeignKeyConstraints();
-    await this.connection.statement(sql);
+    await this.connection.statement(this.grammar.compileDisableForeignKeyConstraints());
+  }
+
+  /**
+   * Execute callback with foreign key constraints disabled
+   */
+  async withoutForeignKeyConstraints(callback: () => Promise<void>): Promise<void> {
+    await this.disableForeignKeyConstraints();
+    
+    try {
+      await callback();
+    } finally {
+      await this.enableForeignKeyConstraints();
+    }
   }
 
   /**

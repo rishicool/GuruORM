@@ -152,7 +152,7 @@ await Schema.create('users', (table) => {
 ## Need Help?
 
 - [Documentation](./docs/getting-started.md)
-- [GitHub Issues](https://github.com/yourusername/guruorm/issues)
+- [GitHub Issues](https://github.com/rishicool/guruorm/issues)
 - [Examples](./examples/)
 
 ## What's Next?

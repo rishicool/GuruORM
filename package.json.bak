@@ -41,12 +41,12 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/yourusername/guruorm.git"
+    "url": "https://github.com/rishicool/guruorm.git"
   },
   "bugs": {
-    "url": "https://github.com/yourusername/guruorm/issues"
+    "url": "https://github.com/rishicool/guruorm/issues"
   },
-  "homepage": "https://github.com/yourusername/guruorm#readme",
+  "homepage": "https://github.com/rishicool/guruorm#readme",
   "dependencies": {
     "mysql2": "^3.6.5",
     "pg": "^8.11.3",

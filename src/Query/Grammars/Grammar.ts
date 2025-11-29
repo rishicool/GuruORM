@@ -423,6 +423,92 @@ export class Grammar {
   }
 
   /**
+   * Compile a "where date" clause
+   */
+  protected whereDate(query: Builder, where: any): string {
+    return `date(${this.wrap(where.column)}) ${where.operator} ${this.parameter(where.value)}`;
+  }
+
+  /**
+   * Compile a "where time" clause
+   */
+  protected whereTime(query: Builder, where: any): string {
+    return `time(${this.wrap(where.column)}) ${where.operator} ${this.parameter(where.value)}`;
+  }
+
+  /**
+   * Compile a "where day" clause
+   */
+  protected whereDay(query: Builder, where: any): string {
+    return `day(${this.wrap(where.column)}) ${where.operator} ${this.parameter(where.value)}`;
+  }
+
+  /**
+   * Compile a "where month" clause
+   */
+  protected whereMonth(query: Builder, where: any): string {
+    return `month(${this.wrap(where.column)}) ${where.operator} ${this.parameter(where.value)}`;
+  }
+
+  /**
+   * Compile a "where year" clause
+   */
+  protected whereYear(query: Builder, where: any): string {
+    return `year(${this.wrap(where.column)}) ${where.operator} ${this.parameter(where.value)}`;
+  }
+
+  /**
+   * Compile a "where JSON contains" clause
+   */
+  protected whereJsonContains(query: Builder, where: any): string {
+    return `json_contains(${this.wrap(where.column)}, ${this.parameter(where.value)})`;
+  }
+
+  /**
+   * Compile a "where JSON doesn't contain" clause
+   */
+  protected whereJsonDoesntContain(query: Builder, where: any): string {
+    return `not json_contains(${this.wrap(where.column)}, ${this.parameter(where.value)})`;
+  }
+
+  /**
+   * Compile a "where JSON length" clause
+   */
+  protected whereJsonLength(query: Builder, where: any): string {
+    return `json_length(${this.wrap(where.column)}) ${where.operator} ${this.parameter(where.value)}`;
+  }
+
+  /**
+   * Compile a "where full text" clause
+   */
+  protected whereFullText(query: Builder, where: any): string {
+    const columns = where.columns.map((col: string) => this.wrap(col)).join(', ');
+    return `match(${columns}) against(${this.parameter(where.value)})`;
+  }
+
+  /**
+   * Compile a "where not" clause
+   */
+  protected whereNot(query: Builder, where: any): string {
+    const value = this.parameter(where.value);
+    return `not ${this.wrap(where.column)} ${where.operator} ${value}`;
+  }
+
+  /**
+   * Compile a "where like" clause
+   */
+  protected whereLike(query: Builder, where: any): string {
+    return `${this.wrap(where.column)} like ${this.parameter(where.value)}`;
+  }
+
+  /**
+   * Compile a "where not like" clause
+   */
+  protected whereNotLike(query: Builder, where: any): string {
+    return `${this.wrap(where.column)} not like ${this.parameter(where.value)}`;
+  }
+
+  /**
    * Compile the "order by" portions of the query
    */
   protected compileOrders(query: Builder, orders: any[]): string {
@@ -431,10 +517,25 @@ export class Grammar {
     }
 
     const compiled = orders
-      .map((order) => `${this.wrap(order.column)} ${order.direction}`)
+      .map((order) => {
+        if (order.type === 'Random') {
+          return this.compileRandom(order.seed);
+        }
+        if (order.type === 'Raw') {
+          return order.sql;
+        }
+        return `${this.wrap(order.column)} ${order.direction}`;
+      })
       .join(', ');
 
     return `order by ${compiled}`;
+  }
+
+  /**
+   * Compile the random statement into SQL
+   */
+  protected compileRandom(seed?: string): string {
+    return 'RANDOM()';
   }
 
   /**
@@ -526,7 +627,14 @@ export class Grammar {
       return "";
     }
 
-    return `group by ${groups.map((group) => this.wrap(group)).join(", ")}`;
+    const compiled = groups.map((group) => {
+      if (typeof group === 'object' && group.type === 'Raw') {
+        return group.sql;
+      }
+      return this.wrap(group);
+    }).join(", ");
+
+    return `group by ${compiled}`;
   }
 
   /**
@@ -557,12 +665,62 @@ export class Grammar {
       return having.sql;
     }
 
-    if (having.type === "between") {
-      return `${this.wrap(having.column)} ${having.not ? "not " : ""}between ? and ?`;
+    if (having.type === "Between" || having.type === "NotBetween") {
+      const not = having.type === "NotBetween" ? "not " : "";
+      return `${having.boolean} ${this.wrap(having.column)} ${not}between ? and ?`;
     }
 
     // Basic having
     const column = this.wrap(having.column);
     return `${having.boolean} ${column} ${having.operator} ?`;
+  }
+
+  /**
+   * Compile an insert and get ID statement into SQL
+   */
+  compileInsertGetId(query: Builder, values: any, sequence?: string): string {
+    return this.compileInsert(query, [values]) + ' returning id';
+  }
+
+  /**
+   * Compile an insert ignore statement into SQL
+   */
+  compileInsertOrIgnore(query: Builder, values: any[]): string {
+    return this.compileInsert(query, values).replace('insert', 'insert or ignore');
+  }
+
+  /**
+   * Compile an upsert statement into SQL
+   */
+  compileUpsert(query: Builder, values: any[], uniqueBy: string[], update?: string[]): string {
+    const insert = this.compileInsert(query, values);
+    const columns = update || Object.keys(values[0]).filter(k => !uniqueBy.includes(k));
+    const updateClause = columns.map(col => `${this.wrap(col)} = excluded.${this.wrap(col)}`).join(', ');
+    const uniqueColumns = uniqueBy.map(col => this.wrap(col)).join(', ');
+
+    return `${insert} on conflict (${uniqueColumns}) do update set ${updateClause}`;
+  }
+
+  /**
+   * Compile a truncate table statement into SQL
+   */
+  compileTruncate(query: Builder): string {
+    const table = this.wrapTable(query['fromTable'] || '');
+    return `truncate table ${table}`;
+  }
+
+  /**
+   * Compile the lock into SQL
+   */
+  protected compileLock(query: Builder, value: boolean | string): string {
+    if (!value) {
+      return '';
+    }
+
+    if (typeof value === 'string') {
+      return value === 'shared' ? 'for share' : 'for update';
+    }
+
+    return 'for update';
   }
 }

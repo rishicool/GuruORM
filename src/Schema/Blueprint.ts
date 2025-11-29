@@ -18,6 +18,13 @@ export interface ColumnDefinition {
   first?: boolean;
   charset?: string;
   collation?: string;
+  storedAs?: string;
+  virtualAs?: string;
+  generatedAs?: string;
+  always?: boolean;
+  invisible?: boolean;
+  useCurrent?: boolean;
+  useCurrentOnUpdate?: boolean;
 }
 
 export class Blueprint {
@@ -100,6 +107,242 @@ export class Blueprint {
   }
 
   /**
+   * Create a new tiny integer column.
+   */
+  tinyInteger(column: string): ColumnDefinition {
+    return this.addColumn('tinyInteger', column);
+  }
+
+  /**
+   * Create a new small integer column.
+   */
+  smallInteger(column: string): ColumnDefinition {
+    return this.addColumn('smallInteger', column);
+  }
+
+  /**
+   * Create a new medium integer column.
+   */
+  mediumInteger(column: string): ColumnDefinition {
+    return this.addColumn('mediumInteger', column);
+  }
+
+  /**
+   * Create a new unsigned integer column.
+   */
+  unsignedInteger(column: string): ColumnDefinition {
+    return this.addColumn('integer', column, { unsigned: true });
+  }
+
+  /**
+   * Create a new unsigned big integer column.
+   */
+  unsignedBigInteger(column: string): ColumnDefinition {
+    return this.addColumn('bigInteger', column, { unsigned: true });
+  }
+
+  /**
+   * Create a new float column.
+   */
+  float(column: string, precision: number = 8, scale: number = 2): ColumnDefinition {
+    return this.addColumn('float', column, { precision, scale });
+  }
+
+  /**
+   * Create a new double column.
+   */
+  double(column: string, precision: number = 8, scale: number = 2): ColumnDefinition {
+    return this.addColumn('double', column, { precision, scale });
+  }
+
+  /**
+   * Create a new decimal column.
+   */
+  decimal(column: string, precision: number = 8, scale: number = 2): ColumnDefinition {
+    return this.addColumn('decimal', column, { precision, scale });
+  }
+
+  /**
+   * Create a new char column.
+   */
+  char(column: string, length: number = 255): ColumnDefinition {
+    return this.addColumn('char', column, { length });
+  }
+
+  /**
+   * Create a new medium text column.
+   */
+  mediumText(column: string): ColumnDefinition {
+    return this.addColumn('mediumText', column);
+  }
+
+  /**
+   * Create a new long text column.
+   */
+  longText(column: string): ColumnDefinition {
+    return this.addColumn('longText', column);
+  }
+
+  /**
+   * Create a new binary column.
+   */
+  binary(column: string): ColumnDefinition {
+    return this.addColumn('binary', column);
+  }
+
+  /**
+   * Create a new UUID column.
+   */
+  uuid(column: string): ColumnDefinition {
+    return this.addColumn('uuid', column);
+  }
+
+  /**
+   * Create a new ULID column.
+   */
+  ulid(column: string): ColumnDefinition {
+    return this.addColumn('ulid', column);
+  }
+
+  /**
+   * Create a new enum column.
+   */
+  enum(column: string, allowed: string[]): ColumnDefinition {
+    return this.addColumn('enum', column, { allowed } as any);
+  }
+
+  /**
+   * Create a new set column.
+   */
+  set(column: string, allowed: string[]): ColumnDefinition {
+    return this.addColumn('set', column, { allowed } as any);
+  }
+
+  /**
+   * Create a new time column.
+   */
+  time(column: string): ColumnDefinition {
+    return this.addColumn('time', column);
+  }
+
+  /**
+   * Create a new year column.
+   */
+  year(column: string): ColumnDefinition {
+    return this.addColumn('year', column);
+  }
+
+  /**
+   * Create a new JSONB column (PostgreSQL).
+   */
+  jsonb(column: string): ColumnDefinition {
+    return this.addColumn('jsonb', column);
+  }
+
+  /**
+   * Create a new IP address column.
+   */
+  ipAddress(column: string): ColumnDefinition {
+    return this.addColumn('ipAddress', column);
+  }
+
+  /**
+   * Create a new MAC address column.
+   */
+  macAddress(column: string): ColumnDefinition {
+    return this.addColumn('macAddress', column);
+  }
+
+  /**
+   * Create a new geometry column.
+   */
+  geometry(column: string): ColumnDefinition {
+    return this.addColumn('geometry', column);
+  }
+
+  /**
+   * Create a new point column.
+   */
+  point(column: string): ColumnDefinition {
+    return this.addColumn('point', column);
+  }
+
+  /**
+   * Create a new linestring column.
+   */
+  lineString(column: string): ColumnDefinition {
+    return this.addColumn('lineString', column);
+  }
+
+  /**
+   * Create a new polygon column.
+   */
+  polygon(column: string): ColumnDefinition {
+    return this.addColumn('polygon', column);
+  }
+
+  /**
+   * Create a new morphs columns for polymorphic relationship.
+   */
+  morphs(name: string, indexName?: string): void {
+    this.unsignedBigInteger(`${name}_id`);
+    this.string(`${name}_type`);
+    
+    this.index([`${name}_id`, `${name}_type`], indexName);
+  }
+
+  /**
+   * Create a new nullable morphs columns.
+   */
+  nullableMorphs(name: string, indexName?: string): void {
+    const idColumn = this.unsignedBigInteger(`${name}_id`);
+    idColumn.nullable = true;
+    
+    const typeColumn = this.string(`${name}_type`);
+    typeColumn.nullable = true;
+    
+    this.index([`${name}_id`, `${name}_type`], indexName);
+  }
+
+  /**
+   * Create a new UUID morphs columns.
+   */
+  uuidMorphs(name: string, indexName?: string): void {
+    this.uuid(`${name}_id`);
+    this.string(`${name}_type`);
+    
+    this.index([`${name}_id`, `${name}_type`], indexName);
+  }
+
+  /**
+   * Create a new ULID morphs columns.
+   */
+  ulidMorphs(name: string, indexName?: string): void {
+    this.ulid(`${name}_id`);
+    this.string(`${name}_type`);
+    
+    this.index([`${name}_id`, `${name}_type`], indexName);
+  }
+
+  /**
+   * Add soft delete column.
+   */
+  softDeletes(column: string = 'deleted_at'): ColumnDefinition {
+    const col = this.timestamp(column);
+    col.nullable = true;
+    return col;
+  }
+
+  /**
+   * Add remember token column for authentication.
+   */
+  rememberToken(): ColumnDefinition {
+    const col = this.string('remember_token', 100);
+    col.nullable = true;
+    return col;
+  }
+
+  /**
    * Create a new boolean column.
    */
   boolean(column: string): ColumnDefinition {
@@ -176,6 +419,84 @@ export class Blueprint {
       type: 'index',
       columns: columnArray,
       index: indexName,
+    });
+  }
+
+  /**
+   * Specify a full-text index for the column.
+   */
+  fullText(columns: string | string[], indexName?: string): void {
+    const columnArray = Array.isArray(columns) ? columns : [columns];
+    this.commands.push({
+      type: 'fullText',
+      columns: columnArray,
+      index: indexName,
+    });
+  }
+
+  /**
+   * Specify a spatial index for the column (MySQL/PostgreSQL).
+   */
+  spatialIndex(columns: string | string[], indexName?: string): void {
+    const columnArray = Array.isArray(columns) ? columns : [columns];
+    this.commands.push({
+      type: 'spatialIndex',
+      columns: columnArray,
+      index: indexName,
+    });
+  }
+
+  /**
+   * Drop an index from the table.
+   */
+  dropIndex(indexName: string | string[]): void {
+    const indexes = Array.isArray(indexName) ? indexName : [indexName];
+    this.commands.push({
+      type: 'dropIndex',
+      indexes,
+    });
+  }
+
+  /**
+   * Drop a unique index from the table.
+   */
+  dropUnique(indexName: string | string[]): void {
+    const indexes = Array.isArray(indexName) ? indexName : [indexName];
+    this.commands.push({
+      type: 'dropUnique',
+      indexes,
+    });
+  }
+
+  /**
+   * Drop a primary key from the table.
+   */
+  dropPrimary(indexName?: string): void {
+    this.commands.push({
+      type: 'dropPrimary',
+      index: indexName,
+    });
+  }
+
+  /**
+   * Drop a foreign key from the table.
+   */
+  dropForeign(indexName: string | string[]): void {
+    const indexes = Array.isArray(indexName) ? indexName : [indexName];
+    this.commands.push({
+      type: 'dropForeign',
+      indexes,
+    });
+  }
+
+  /**
+   * Rename an index on the table.
+   */
+  renameIndex(from: string, to: string): void {
+    this.commands.push({
+      type: 'renameIndex',
+      from,
+      to,
     });
   }
 
@@ -276,5 +597,53 @@ export class ForeignKeyDefinition {
    */
   cascadeOnUpdate(): this {
     return this.onUpdate('cascade');
+  }
+
+  /**
+   * Set the foreign key to set NULL on delete.
+   */
+  nullOnDelete(): this {
+    return this.onDelete('set null');
+  }
+
+  /**
+   * Set the foreign key to restrict on delete.
+   */
+  restrictOnDelete(): this {
+    return this.onDelete('restrict');
+  }
+
+  /**
+   * Set the foreign key to restrict on update.
+   */
+  restrictOnUpdate(): this {
+    return this.onUpdate('restrict');
+  }
+
+  /**
+   * Set the foreign key to no action on delete.
+   */
+  noActionOnDelete(): this {
+    return this.onDelete('no action');
+  }
+
+  /**
+   * Set the foreign key to no action on update.
+   */
+  noActionOnUpdate(): this {
+    return this.onUpdate('no action');
+  }
+
+  /**
+   * Get the foreign key definition.
+   */
+  getDefinition(): any {
+    return {
+      columns: this.columns,
+      on: this._on,
+      references: this._references,
+      onDelete: this._onDelete,
+      onUpdate: this._onUpdate,
+    };
   }
 }

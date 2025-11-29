@@ -5,6 +5,14 @@
  */
 
 import { Command } from 'commander';
+import { MigrationMaker } from '../dist/CLI/MigrationMaker.js';
+import { SeederMaker } from '../dist/CLI/SeederMaker.js';
+import { FactoryMaker } from '../dist/CLI/FactoryMaker.js';
+import * as path from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const program = new Command();
 
@@ -74,8 +82,23 @@ program
   .option('--table <table>', 'The table to modify')
   .option('--create <table>', 'The table to create')
   .action((name, options) => {
-    console.log(`Creating migration: ${name}`, options);
-    console.log('This feature will be implemented in Phase 8');
+    try {
+      const maker = new MigrationMaker();
+      const tableName = options.create || options.table;
+      const isCreate = !!options.create;
+      
+      const { fileName, contents, className } = maker.create(name, tableName, isCreate);
+      
+      const migrationsPath = path.join(process.cwd(), 'database', 'migrations');
+      const fullPath = maker.write(migrationsPath, fileName, contents);
+      
+      console.log(`✅ Migration created successfully!`);
+      console.log(`📄 ${fullPath}`);
+      console.log(`🏷️  Class: ${className}`);
+    } catch (error) {
+      console.error('❌ Error creating migration:', error.message);
+      process.exit(1);
+    }
   });
 
 // Seeder commands
@@ -92,8 +115,42 @@ program
   .command('make:seeder <name>')
   .description('Create a new seeder class')
   .action((name) => {
-    console.log(`Creating seeder: ${name}`);
-    console.log('This feature will be implemented in Phase 8');
+    try {
+      const maker = new SeederMaker();
+      const { fileName, contents, className } = maker.create(name);
+      
+      const seedersPath = path.join(process.cwd(), 'database', 'seeders');
+      const fullPath = maker.write(seedersPath, fileName, contents);
+      
+      console.log(`✅ Seeder created successfully!`);
+      console.log(`📄 ${fullPath}`);
+      console.log(`🏷️  Class: ${className}`);
+    } catch (error) {
+      console.error('❌ Error creating seeder:', error.message);
+      process.exit(1);
+    }
+  });
+
+// Make factory command
+program
+  .command('make:factory <name>')
+  .description('Create a new factory class')
+  .option('--model <model>', 'The model name for the factory')
+  .action((name, options) => {
+    try {
+      const maker = new FactoryMaker();
+      const { fileName, contents, className } = maker.create(name, options.model);
+      
+      const factoriesPath = path.join(process.cwd(), 'database', 'factories');
+      const fullPath = maker.write(factoriesPath, fileName, contents);
+      
+      console.log(`✅ Factory created successfully!`);
+      console.log(`📄 ${fullPath}`);
+      console.log(`🏷️  Class: ${className}`);
+    } catch (error) {
+      console.error('❌ Error creating factory:', error.message);
+      process.exit(1);
+    }
   });
 
 // Schema commands

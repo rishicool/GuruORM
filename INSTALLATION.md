@@ -319,7 +319,7 @@ Create `.vscode/settings.json`:
 
 - 📚 [Documentation](./docs/)
 - 💡 [Examples](./examples/)
-- 🐛 [Report Issues](https://github.com/yourusername/guruorm/issues)
+- 🐛 [Report Issues](https://github.com/rishicool/guruorm/issues)
 - 💬 [Discussions](https://github.com/yourusername/guruorm/discussions)
 
 ---
