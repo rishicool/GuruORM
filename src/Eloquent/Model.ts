@@ -848,14 +848,7 @@ export class Model {
    */
   static async find<T extends Model>(this: new (attributes?: Record<string, any>) => T, id: any, columns: string[] = ['*']): Promise<T | null> {
     const model = new this();
-    const builder = model.newQuery();
-    const result = await builder.find(id, columns);
-    
-    if (!result) {
-      return null;
-    }
-
-    return model.newInstance(result, true);
+    return await model.newQuery().find(id, columns);
   }
 
   /**
@@ -863,8 +856,115 @@ export class Model {
    */
   static async findOrFail<T extends Model>(this: new (attributes?: Record<string, any>) => T, id: any, columns: string[] = ['*']): Promise<T> {
     const model = new this();
-    const result = await model.newQuery().findOrFail(id, columns);
-    return model.newInstance(result, true);
+    return await model.newQuery().findOrFail(id, columns);
+  }
+
+  /**
+   * Get all of the models from the database
+   */
+  static all<T extends Model>(this: new (attributes?: Record<string, any>) => T, columns: string[] = ['*']): Promise<T[]> {
+    const model = new this();
+    return model.newQuery().get(columns);
+  }
+
+  /**
+   * Begin querying the model
+   */
+  static query<T extends Model>(this: new (attributes?: Record<string, any>) => T): EloquentBuilder {
+    const model = new this();
+    return model.newQuery();
+  }
+
+  /**
+   * Begin querying the model with an eager load
+   */
+  static with<T extends Model>(this: new (attributes?: Record<string, any>) => T, relations: string | string[] | Record<string, Function>): EloquentBuilder {
+    const model = new this();
+    return model.newQuery().with(relations);
+  }
+
+  /**
+   * Add a basic where clause to the query
+   */
+  static where<T extends Model>(
+    this: new (attributes?: Record<string, any>) => T,
+    column: string | Function | Record<string, any>,
+    operator?: any,
+    value?: any,
+    boolean: 'and' | 'or' = 'and'
+  ): EloquentBuilder {
+    const model = new this();
+    return model.newQuery().where(column, operator, value, boolean);
+  }
+
+  /**
+   * Add an "or where" clause to the query
+   */
+  static orWhere<T extends Model>(
+    this: new (attributes?: Record<string, any>) => T,
+    column: string | Function | Record<string, any>,
+    operator?: any,
+    value?: any
+  ): EloquentBuilder {
+    const model = new this();
+    return model.newQuery().orWhere(column, operator, value);
+  }
+
+  /**
+   * Get the first record matching the attributes
+   */
+  static first<T extends Model>(this: new (attributes?: Record<string, any>) => T, columns: string[] = ['*']): Promise<T | null> {
+    const model = new this();
+    return model.newQuery().first(columns);
+  }
+
+  /**
+   * Execute a query for a single record by ID and delete it
+   */
+  static async destroy<T extends Model>(this: new (attributes?: Record<string, any>) => T, ids: any | any[]): Promise<number> {
+    const model = new this();
+    const idsArray = Array.isArray(ids) ? ids : [ids];
+    return await model.newQuery().whereIn(model.getKeyName(), idsArray).delete();
+  }
+
+  /**
+   * Retrieve the "count" result of the query
+   */
+  static count<T extends Model>(this: new (attributes?: Record<string, any>) => T, columns: string = '*'): Promise<number> {
+    const model = new this();
+    return model.newQuery().count(columns);
+  }
+
+  /**
+   * Retrieve the minimum value of a given column
+   */
+  static min<T extends Model>(this: new (attributes?: Record<string, any>) => T, column: string): Promise<number> {
+    const model = new this();
+    return model.newQuery().min(column);
+  }
+
+  /**
+   * Retrieve the maximum value of a given column
+   */
+  static max<T extends Model>(this: new (attributes?: Record<string, any>) => T, column: string): Promise<number> {
+    const model = new this();
+    return model.newQuery().max(column);
+  }
+
+  /**
+   * Retrieve the sum of the values of a given column
+   */
+  static sum<T extends Model>(this: new (attributes?: Record<string, any>) => T, column: string): Promise<number> {
+    const model = new this();
+    return model.newQuery().sum(column);
+  }
+
+  /**
+   * Retrieve the average of the values of a given column
+   */
+  static avg<T extends Model>(this: new (attributes?: Record<string, any>) => T, column: string): Promise<number> {
+    const model = new this();
+    return model.newQuery().avg(column);
   }
 
   /**

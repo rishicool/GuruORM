@@ -90,7 +90,8 @@ export class Builder {
    * Execute the query and get the first result
    */
   async first(columns: string[] = ['*']): Promise<any> {
-    return this.take(1).get(columns).then(results => results.first());
+    const results = await this.take(1).get(columns);
+    return results.first();
   }
 
   /**
@@ -191,7 +192,7 @@ export class Builder {
    */
   hydrate(items: any[]): Collection<any> {
     const models = items.map(item => this.newModelInstance(item, true));
-    return new Collection(models);
+    return new Collection(...models);
   }
 
   /**

@@ -2,7 +2,7 @@ import { Pool } from 'pg';
 import { Connection } from './Connection';
 import { ConnectionConfig } from './ConnectionInterface';
 import { PostgresGrammar } from '../Query/Grammars/PostgresGrammar';
-import { Grammar as SchemaGrammar } from '../Schema/Grammars/Grammar';
+import { PostgresGrammar as SchemaPostgresGrammar } from '../Schema/Grammars/PostgresGrammar';
 import { Processor } from '../Query/Processors/Processor';
 
 /**
@@ -134,7 +134,12 @@ export class PostgresConnection extends Connection {
    * Create a transaction within the database
    */
   protected async createTransaction(): Promise<void> {
-    await this.unprepared('BEGIN');
+    if (this.transactions === 0) {
+      await this.unprepared('BEGIN');
+    } else {
+      // Create savepoint for nested transaction
+      await this.unprepared(`SAVEPOINT sp${this.transactions + 1}`);
+    }
   }
 
   /**
@@ -151,7 +156,7 @@ export class PostgresConnection extends Connection {
     if (toLevel === 0) {
       await this.unprepared('ROLLBACK');
     } else {
-      await this.unprepared(`ROLLBACK TO SAVEPOINT sp${toLevel}`);
+      await this.unprepared(`ROLLBACK TO SAVEPOINT sp${toLevel + 1}`);
     }
   }
 
@@ -173,7 +178,7 @@ export class PostgresConnection extends Connection {
    * Set the schema grammar to the default implementation
    */
   protected useDefaultSchemaGrammar(): void {
-    this.schemaGrammar = new SchemaGrammar();
+    this.schemaGrammar = new SchemaPostgresGrammar();
   }
 
   /**

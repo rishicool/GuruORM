@@ -84,7 +84,15 @@ export class Manager {
    * Bootstrap Eloquent ORM
    */
   bootEloquent(): void {
-    // Eloquent bootstrapping will be implemented when Model class is ready
+    const Model = require('../Eloquent/Model').Model;
+    
+    // Set up the connection resolver for Model
+    Model.setConnectionResolver({
+      connection: (name?: string) => {
+        return this.getConnection(name);
+      }
+    });
+    
     console.log('Eloquent ORM bootstrapped');
   }
 
