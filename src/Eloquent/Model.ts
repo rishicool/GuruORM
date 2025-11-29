@@ -31,6 +31,9 @@ export class Model {
   // Event customization
   protected dispatchesEvents: Record<string, string> = {};
   
+  // Touch parent relations on save
+  protected touches: string[] = [];
+  
   // Model state
   protected attributes: Record<string, any> = {};
   protected original: Record<string, any> = {};
@@ -83,7 +86,7 @@ export class Model {
         const modelProperties = [
           'table', 'primaryKey', 'keyType', 'incrementing', 'timestamps', 'dateFormat', 'connection',
           'fillable', 'guarded', 'hidden', 'visible', 'appends', 'casts', 'dispatchesEvents',
-          'attributes', 'original', 'relations', 'exists', 'wasRecentlyCreated'
+          'attributes', 'original', 'relations', 'exists', 'wasRecentlyCreated', 'touches', 'changes'
         ];
         
         // If it's a model property, return it directly
@@ -116,7 +119,7 @@ export class Model {
         const modelProperties = [
           'table', 'primaryKey', 'keyType', 'incrementing', 'timestamps', 'dateFormat', 'connection',
           'fillable', 'guarded', 'hidden', 'visible', 'appends', 'casts', 'dispatchesEvents',
-          'attributes', 'original', 'relations', 'exists', 'wasRecentlyCreated'
+          'attributes', 'original', 'relations', 'exists', 'wasRecentlyCreated', 'touches', 'changes'
         ];
         
         // If it's a known model property or method, set it directly
@@ -582,6 +585,26 @@ export class Model {
   }
 
   /**
+   * Touch the owning relations of the model
+   */
+  async touchOwners(): Promise<void> {
+    if (!this.touches || this.touches.length === 0) {
+      return;
+    }
+
+    for (const relation of this.touches) {
+      if (this.relations[relation]) {
+        await this.relations[relation].touch();
+      } else if (typeof (this as any)[relation] === 'function') {
+        const result = await this.getRelationshipFromMethod(relation);
+        if (result) {
+          await result.touch();
+        }
+      }
+    }
+  }
+
+  /**
    * Get the first record matching the attributes or instantiate it
    */
   static async firstOrNew(attributes: Record<string, any>, values: Record<string, any> = {}): Promise<any> {
@@ -664,13 +687,13 @@ export class Model {
 
     const time = new Date();
 
-    const updatedAtColumn = (this.constructor as typeof Model).UPDATED_AT;
-    if (updatedAtColumn && !this.isDirty(updatedAtColumn)) {
+    const updatedAtColumn = (this.constructor as typeof Model).UPDATED_AT || 'updated_at';
+    if (updatedAtColumn) {
       this.setAttribute(updatedAtColumn, time);
     }
 
-    const createdAtColumn = (this.constructor as typeof Model).CREATED_AT;
-    if (!this.exists && createdAtColumn && !this.isDirty(createdAtColumn)) {
+    const createdAtColumn = (this.constructor as typeof Model).CREATED_AT || 'created_at';
+    if (!this.exists && createdAtColumn) {
       this.setAttribute(createdAtColumn, time);
     }
   }
@@ -700,11 +723,17 @@ export class Model {
     this.exists = true;
     this.wasRecentlyCreated = true;
 
+    // Sync original to reflect current state
+    this.syncOriginal();
+
     // Fire the created event
     await this.fireModelEvent('created', false);
 
     // Fire the saved event
     await this.fireModelEvent('saved', false);
+
+    // Touch owning relations
+    await this.touchOwners();
 
     return true;
   }
@@ -731,11 +760,17 @@ export class Model {
     const updated = await query.where(this.primaryKey, this.getKey()).update(dirty);
 
     if (updated > 0) {
+      // Sync original to reflect current state
+      this.syncOriginal();
+
       // Fire the updated event
       await this.fireModelEvent('updated', false);
 
       // Fire the saved event
       await this.fireModelEvent('saved', false);
+
+      // Touch owning relations
+      await this.touchOwners();
     }
 
     return updated > 0;
@@ -1398,7 +1433,7 @@ export class Model {
     const propertiesToCopy = [
       'table', 'primaryKey', 'keyType', 'incrementing', 'timestamps', 'dateFormat', 'connection',
       'fillable', 'guarded', 'hidden', 'visible', 'appends', 'casts', 'dispatchesEvents',
-      'original', 'relations', 'changes', 'wasRecentlyCreated'
+      'original', 'relations', 'changes', 'wasRecentlyCreated', 'touches'
     ];
     
     for (const prop of propertiesToCopy) {

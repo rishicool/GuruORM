@@ -8,6 +8,8 @@ import { Builder } from '../Builder';
 export class BelongsTo extends Relation {
   protected foreignKey: string;
   protected ownerKey: string;
+  protected withDefaultValue: any = null;
+  protected withDefaultCallback: Function | null = null;
 
   constructor(query: Builder, parent: Model, foreignKey: string, ownerKey: string) {
     super(query, parent);
@@ -65,6 +67,9 @@ export class BelongsTo extends Relation {
       const key = model.getAttribute(this.foreignKey);
       if (key && dictionary[key]) {
         model['relations'][relation] = dictionary[key];
+      } else if (this.withDefaultValue !== null || this.withDefaultCallback !== null) {
+        // If no match and withDefault is set, use default model
+        model['relations'][relation] = this.getDefaultFor(this.query['model']);
       }
     }
 
@@ -75,7 +80,49 @@ export class BelongsTo extends Relation {
    * Get the results of the relationship
    */
   async getResults(): Promise<any> {
-    return this.query.first();
+    const result = await this.query.first();
+    
+    // If no result and withDefault is set, return default model
+    if (!result && (this.withDefaultValue !== null || this.withDefaultCallback !== null)) {
+      return this.getDefaultFor(this.query['model']);
+    }
+    
+    return result;
+  }
+
+  /**
+   * Get the default value for this relation
+   */
+  protected getDefaultFor(instance: Model): Model {
+    if (this.withDefaultCallback !== null) {
+      return this.withDefaultCallback(instance) || instance;
+    }
+
+    if (this.withDefaultValue === true) {
+      return instance;
+    }
+
+    if (this.withDefaultValue instanceof Model) {
+      return this.withDefaultValue;
+    }
+
+    if (typeof this.withDefaultValue === 'object') {
+      return new (instance.constructor as any)(this.withDefaultValue);
+    }
+
+    return instance;
+  }
+
+  /**
+   * Return a new model instance with default attributes or callback
+   */
+  withDefault(callback: Function | Record<string, any> | boolean = true): this {
+    if (typeof callback === 'function') {
+      this.withDefaultCallback = callback;
+    } else {
+      this.withDefaultValue = callback;
+    }
+    return this;
   }
 
   /**
