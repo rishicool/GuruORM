@@ -96,6 +96,79 @@ export class Manager {
   }
 
   /**
+   * Begin a fluent query against a database table (instance method)
+   */
+  table(table: string, as?: string, connection?: string): any {
+    return this.getConnection(connection).table(table, as);
+  }
+
+  /**
+   * Get a schema builder instance (instance method)
+   */
+  schema(connection?: string): any {
+    return this.getConnection(connection).getSchemaBuilder();
+  }
+
+  /**
+   * Run a select statement (instance method)
+   */
+  async select(query: string, bindings: any[] = [], connection?: string): Promise<any[]> {
+    return this.getConnection(connection).select(query, bindings);
+  }
+
+  /**
+   * Run an insert statement (instance method)
+   */
+  async insert(query: string, bindings: any[] = [], connection?: string): Promise<boolean> {
+    return this.getConnection(connection).insert(query, bindings);
+  }
+
+  /**
+   * Run an update statement (instance method)
+   */
+  async update(query: string, bindings: any[] = [], connection?: string): Promise<number> {
+    return this.getConnection(connection).update(query, bindings);
+  }
+
+  /**
+   * Run a delete statement (instance method)
+   */
+  async delete(query: string, bindings: any[] = [], connection?: string): Promise<number> {
+    return this.getConnection(connection).delete(query, bindings);
+  }
+
+  /**
+   * Execute a statement (instance method)
+   */
+  async statement(query: string, bindings: any[] = [], connection?: string): Promise<boolean> {
+    return this.getConnection(connection).statement(query, bindings);
+  }
+
+  /**
+   * Begin a transaction (instance method)
+   */
+  async transaction<T>(callback: (trx: any) => Promise<T>, connection?: string): Promise<T> {
+    const conn = this.getConnection(connection);
+    return conn.transaction(async () => {
+      return callback(conn);
+    });
+  }
+
+  /**
+   * Disconnect from all databases (instance method)
+   */
+  async disconnect(name?: string): Promise<void> {
+    if (name) {
+      await this.getConnection(name).disconnect();
+    } else {
+      // Disconnect all connections
+      for (const [connectionName] of this.connections) {
+        await this.getConnection(connectionName).disconnect();
+      }
+    }
+  }
+
+  /**
    * Begin a fluent query against a database table (static method)
    */
   static table(table: string, as?: string, connection?: string): any {
@@ -161,9 +234,14 @@ export class Manager {
   /**
    * Begin a transaction (static method)
    */
-  static async transaction<T>(callback: () => Promise<T>, connection?: string): Promise<T> {
-    return Manager.getInstance()
-      .getConnection(connection)
-      .transaction(callback);
+  static async transaction<T>(callback: (trx: any) => Promise<T>, connection?: string): Promise<T> {
+    return Manager.getInstance().transaction(callback, connection);
+  }
+
+  /**
+   * Disconnect from all databases (static method)
+   */
+  static async disconnect(name?: string): Promise<void> {
+    return Manager.getInstance().disconnect(name);
   }
 }
