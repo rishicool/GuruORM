@@ -1,7 +1,7 @@
 import { Pool } from 'pg';
 import { Connection } from './Connection';
 import { ConnectionConfig } from './ConnectionInterface';
-import { Grammar as QueryGrammar } from '../Query/Grammars/Grammar';
+import { PostgresGrammar } from '../Query/Grammars/PostgresGrammar';
 import { Grammar as SchemaGrammar } from '../Schema/Grammars/Grammar';
 import { Processor } from '../Query/Processors/Processor';
 
@@ -166,7 +166,7 @@ export class PostgresConnection extends Connection {
    * Set the query grammar to the default implementation
    */
   protected useDefaultQueryGrammar(): void {
-    this.queryGrammar = new QueryGrammar();
+    this.queryGrammar = new PostgresGrammar();
   }
 
   /**

@@ -44,3 +44,6 @@ logs/
 # Temporary files
 tmp/
 temp/
+
+# Test project (internal testing only)
+test-project/

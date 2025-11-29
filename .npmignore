@@ -37,3 +37,6 @@ coverage/
 # Build artifacts
 *.tsbuildinfo
 .DS_Store
+
+# Test project (internal testing only)
+test-project/
