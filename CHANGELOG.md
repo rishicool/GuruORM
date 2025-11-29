@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.6.1] - 2025-11-29
+
+### Updated
+- **Documentation**
+  - Removed Laravel/Illuminate mentions (kept only as inspiration)
+  - Updated QUICKSTART.md to reflect v1.6.0 status
+  - Updated PUBLISHING.md with current version and examples
+  - Added PERFORMANCE.md with comprehensive benchmark vs 8 ORMs
+
+### Fixed
+- Repository cleanup (removed Laravel references from keywords)
+- Source code comments updated to generic inspiration line
+
 ## [1.6.0] - 2024-11-29
 
 ### 🎉 JavaScript & TypeScript - Works with Both!
