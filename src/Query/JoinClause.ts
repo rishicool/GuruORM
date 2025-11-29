@@ -6,10 +6,56 @@ export class JoinClause {
   public type: JoinType;
   public table: string;
   public wheres: any[] = [];
+  protected bindings: any = { where: [] };
 
   constructor(table: string, type: JoinType = 'inner') {
     this.table = table;
     this.type = type;
+  }
+
+  /**
+   * Get the current query value bindings
+   */
+  getBindings(): any[] {
+    return this.bindings.where || [];
+  }
+
+  /**
+   * Add a binding to the query
+   */
+  addBinding(value: any, type: string = 'where'): this {
+    if (!this.bindings[type]) {
+      this.bindings[type] = [];
+    }
+
+    if (Array.isArray(value)) {
+      this.bindings[type] = this.bindings[type].concat(value);
+    } else {
+      this.bindings[type].push(value);
+    }
+
+    return this;
+  }
+
+  /**
+   * Add a where clause (for joinWhere)
+   */
+  where(column: string, operator?: any, value?: any, boolean: 'and' | 'or' = 'and'): this {
+    if (value === undefined) {
+      value = operator;
+      operator = '=';
+    }
+
+    this.wheres.push({
+      type: 'Basic',
+      column,
+      operator,
+      value,
+      boolean,
+    });
+
+    this.addBinding(value, 'where');
+    return this;
   }
 
   /**

@@ -2,6 +2,7 @@ import { Connection } from '../Connection/Connection';
 import { Grammar } from './Grammars/Grammar';
 import { Processor } from './Processors/Processor';
 import { Expression } from './Expression';
+import { JoinClause } from './JoinClause';
 
 /**
  * Query Builder - inspired by Laravel's Query Builder
@@ -80,6 +81,64 @@ export class Builder {
       this.fromAlias = as;
     }
     return this;
+  }
+
+  /**
+   * Add a join clause to the query
+   */
+  join(table: string, first: string | Function, operator?: string | null, second?: string | null, type: 'inner' | 'left' | 'right' | 'cross' = 'inner', where = false): this {
+    const join = new JoinClause(table, type);
+
+    // Handle closure for complex join conditions
+    if (typeof first === 'function') {
+      first(join);
+      this.joins.push(join);
+      this.addBinding(join.getBindings(), 'join');
+      return this;
+    }
+
+    // Add simple on clause
+    const method = where ? 'where' : 'on';
+    (join as any)[method](first, operator, second);
+    
+    this.joins.push(join);
+    return this;
+  }
+
+  /**
+   * Add a left join to the query
+   */
+  leftJoin(table: string, first: string | Function, operator?: string | null, second?: string | null): this {
+    return this.join(table, first, operator, second, 'left');
+  }
+
+  /**
+   * Add a right join to the query
+   */
+  rightJoin(table: string, first: string | Function, operator?: string | null, second?: string | null): this {
+    return this.join(table, first, operator, second, 'right');
+  }
+
+  /**
+   * Add a cross join to the query
+   */
+  crossJoin(table: string): this {
+    this.joins.push({ type: 'cross', table });
+    return this;
+  }
+
+  /**
+   * Add a join with a where clause
+   */
+  joinWhere(table: string, first: string, operator: string, second: string, type: 'inner' | 'left' | 'right' = 'inner'): this {
+    return this.join(table, first, operator, second, type, true);
+  }
+
+  /**
+   * Add a left join with a where clause
+   */
+  leftJoinWhere(table: string, first: string, operator: string, second: string): this {
+    return this.joinWhere(table, first, operator, second, 'left');
   }
 
   /**

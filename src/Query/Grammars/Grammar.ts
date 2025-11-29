@@ -175,6 +175,63 @@ export class Grammar {
   }
 
   /**
+   * Compile the "join" portions of the query
+   */
+  protected compileJoins(query: Builder, joins: any[]): string {
+    if (joins.length === 0) {
+      return '';
+    }
+
+    return joins
+      .map((join) => {
+        if (join.type === 'cross') {
+          return `cross join ${this.wrapTable(join.table)}`;
+        }
+
+        const table = this.wrapTable(join.table);
+        const clauses = this.compileJoinConstraints(join);
+        const type = join.type === 'inner' ? 'inner' : join.type;
+
+        return `${type} join ${table} on ${clauses}`;
+      })
+      .join(' ');
+  }
+
+  /**
+   * Compile the "on" clauses for a join
+   */
+  protected compileJoinConstraints(join: any): string {
+    const wheres = join.wheres || [];
+    
+    if (wheres.length === 0) {
+      return '';
+    }
+
+    return wheres
+      .map((where: any, index: number) => {
+        const boolean = index === 0 ? '' : where.boolean;
+        const connector = boolean ? ` ${boolean} ` : '';
+
+        if (where.type === 'Column') {
+          return `${connector}${this.wrap(where.first)} ${where.operator} ${this.wrap(where.second)}`;
+        }
+
+        if (where.type === 'Nested') {
+          const nested = this.compileJoinConstraints(where.query);
+          return `${connector}(${nested})`;
+        }
+
+        if (where.type === 'Basic') {
+          const value = this.parameter(where.value);
+          return `${connector}${this.wrap(where.column)} ${where.operator} ${value}`;
+        }
+
+        return '';
+      })
+      .join('');
+  }
+
+  /**
    * Compile the "where" portions of the query
    */
   protected compileWheres(query: Builder, wheres: any[]): string {
