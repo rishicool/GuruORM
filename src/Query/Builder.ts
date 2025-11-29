@@ -1144,6 +1144,14 @@ export class Builder {
   }
 
   /**
+   * Get an array of a single column's values
+   */
+  async pluck(column: string): Promise<any[]> {
+    const results = await this.get([column]);
+    return results.map(row => row[column]);
+  }
+
+  /**
    * Insert new records into the database
    */
   async insert(values: any[] | any): Promise<boolean> {
@@ -1151,7 +1159,9 @@ export class Builder {
       return true;
     }
 
-    const valuesArray = Array.isArray(values[0]) ? values : [values];
+    // If values is an array and the first element is an object (not an array), treat as multiple records
+    // If values is an object, wrap it in an array for single record insert
+    const valuesArray = Array.isArray(values) ? values : [values];
     
     const sql = this.grammar.compileInsert(this, valuesArray);
     const bindings = this.grammar.prepareBindingsForInsert(this.bindings, valuesArray);
@@ -1222,8 +1232,14 @@ export class Builder {
    * Insert or update a record matching the attributes, and fill it with values
    */
   async updateOrInsert(attributes: any, values: any = {}): Promise<boolean> {
+    // Build where conditions from attributes on a cloned query
+    let query = this;
+    for (const [key, val] of Object.entries(attributes)) {
+      query = query.where(key, val);
+    }
+
     // Try to find existing record
-    const existing = await this.where(attributes).first();
+    const existing = await query.first();
 
     if (existing) {
       // Update existing record
@@ -1231,7 +1247,13 @@ export class Builder {
         return true;
       }
 
-      return (await this.where(attributes).update(values)) > 0;
+      // Build new where query for update
+      let updateQuery: Builder = this;
+      for (const [key, val] of Object.entries(attributes)) {
+        updateQuery = updateQuery.where(key, val);
+      }
+
+      return (await updateQuery.update(values)) > 0;
     }
 
     // Insert new record
@@ -1801,5 +1823,41 @@ export class Builder {
     for (const result of results) {
       yield result;
     }
+  }
+
+  /**
+   * Clone the query builder
+   */
+  clone(): Builder {
+    const cloned = new Builder(this.connection, this.grammar, this.processor);
+    
+    // Copy all query components
+    cloned.columns = [...this.columns];
+    cloned.fromTable = this.fromTable;
+    cloned.fromAlias = this.fromAlias;
+    cloned.joins = [...this.joins];
+    cloned.wheres = [...this.wheres];
+    cloned.groups = [...this.groups];
+    cloned.havings = [...this.havings];
+    cloned.orders = [...this.orders];
+    cloned.limitValue = this.limitValue;
+    cloned.offsetValue = this.offsetValue;
+    cloned.unions = [...this.unions];
+    cloned.lock = this.lock;
+    
+    // Copy bindings
+    cloned.bindings = {
+      select: [...this.bindings.select],
+      from: [...this.bindings.from],
+      join: [...this.bindings.join],
+      where: [...this.bindings.where],
+      groupBy: [...this.bindings.groupBy],
+      having: [...this.bindings.having],
+      order: [...this.bindings.order],
+      union: [...this.bindings.union],
+      unionOrder: [...this.bindings.unionOrder],
+    };
+    
+    return cloned;
   }
 }

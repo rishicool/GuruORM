@@ -24,13 +24,27 @@ Please be respectful and constructive in all interactions with the community.
 
 1. Fork the repository
 2. Create a new branch: `git checkout -b feature/my-feature`
-3. Make your changes
+3. Make your changes **following our [Coding Standards](CODING_STANDARDS.md)**
 4. Write tests for your changes
 5. Ensure all tests pass: `npm test`
 6. Lint your code: `npm run lint`
 7. Commit your changes following [Conventional Commits](https://www.conventionalcommits.org/)
 8. Push to your fork
 9. Open a Pull Request
+
+## Coding Standards
+
+**⚠️ IMPORTANT**: All code contributions MUST follow our [Coding Standards](CODING_STANDARDS.md).
+
+Key requirements:
+- ✅ Consistent error handling patterns (try-catch with meaningful messages)
+- ✅ Proper parameter validation (explicit undefined checks)
+- ✅ Consistent array/object handling
+- ✅ Follow Laravel/Eloquent naming conventions
+- ✅ Comprehensive JSDoc documentation
+- ✅ Type safety with TypeScript
+
+**Please read [CODING_STANDARDS.md](CODING_STANDARDS.md) before contributing!**
 
 ### Development Setup
 

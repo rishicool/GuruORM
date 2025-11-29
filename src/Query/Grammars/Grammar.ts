@@ -36,9 +36,14 @@ export class Grammar {
   /**
    * Wrap a value in keyword identifiers
    */
-  wrap(value: string | Expression): string {
+  wrap(value: string | Expression | any): string {
     if (value instanceof Expression) {
       return this.getValue(value);
+    }
+
+    // Handle non-string values - convert to string
+    if (typeof value !== 'string') {
+      value = String(value);
     }
 
     if (value.toLowerCase().includes(' as ')) {
@@ -328,7 +333,9 @@ export class Grammar {
     if (where.values && typeof where.values === 'object' && typeof where.values.toSql === 'function') {
       return this.whereInSub(query, where);
     }
-    const values = this.parameterize(where.values);
+    // Ensure values is always an array
+    const valuesArray = Array.isArray(where.values) ? where.values : [where.values];
+    const values = this.parameterize(valuesArray);
     return `${this.wrap(where.column)} in (${values})`;
   }
 
@@ -338,9 +345,11 @@ export class Grammar {
   protected whereNotIn(query: Builder, where: any): string {
     // Check if values is a subquery (Builder instance)
     if (where.values && typeof where.values === 'object' && typeof where.values.toSql === 'function') {
-      return this.whereNotInSub(query, where);
+      return this.whereInSub(query, where);
     }
-    const values = this.parameterize(where.values);
+    // Ensure values is always an array
+    const valuesArray = Array.isArray(where.values) ? where.values : [where.values];
+    const values = this.parameterize(valuesArray);
     return `${this.wrap(where.column)} not in (${values})`;
   }
 
@@ -585,7 +594,14 @@ export class Grammar {
     const table = this.wrapTable(query['fromTable'] || '');
     
     const columns = Object.keys(values)
-      .map((key) => `${this.wrap(key)} = ${this.parameter(values[key])}`)
+      .map((key) => {
+        const value = values[key];
+        // If value is an Expression, use its value directly
+        if (value instanceof Expression) {
+          return `${this.wrap(key)} = ${value.getValue()}`;
+        }
+        return `${this.wrap(key)} = ${this.parameter(value)}`;
+      })
       .join(', ');
 
     const where = this.compileWheres(query, query['wheres']);
@@ -614,7 +630,8 @@ export class Grammar {
    * Prepare the bindings for an update statement
    */
   prepareBindingsForUpdate(bindings: any, values: any): any[] {
-    const updateBindings = Object.values(values);
+    // Filter out Expression values from bindings since they're used directly in SQL
+    const updateBindings = Object.values(values).filter(v => !(v instanceof Expression));
     const whereBindings = bindings.where || [];
     return [...updateBindings, ...whereBindings];
   }

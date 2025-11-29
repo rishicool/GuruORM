@@ -60,4 +60,50 @@ export abstract class Relation {
   getRelated(): Model {
     return this.related;
   }
+
+  /**
+   * Execute the query and get all results
+   */
+  async get(columns: string[] = ['*']): Promise<any> {
+    return this.query.get(columns);
+  }
+
+  /**
+   * Execute the query and get the first result
+   */
+  async first(columns: string[] = ['*']): Promise<any> {
+    return this.query.first(columns);
+  }
+
+  /**
+   * Add a where clause to the relationship query
+   */
+  where(...args: any[]): this {
+    (this.query as any).where(...args);
+    return this;
+  }
+
+  /**
+   * Add an order by clause to the relationship query
+   */
+  orderBy(...args: any[]): this {
+    (this.query as any).orderBy(...args);
+    return this;
+  }
+
+  /**
+   * Set the limit for the relationship query
+   */
+  limit(value: number): this {
+    (this.query as any).limit(value);
+    return this;
+  }
+
+  /**
+   * Set the offset for the relationship query
+   */
+  offset(value: number): this {
+    (this.query as any).offset(value);
+    return this;
+  }
 }

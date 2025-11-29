@@ -425,6 +425,17 @@ node examples/performance-benchmark.js
 
 We welcome contributions! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for details.
 
+**⚠️ Important:** All contributions must follow our [Coding Standards](CODING_STANDARDS.md). This ensures consistency and professional quality throughout the codebase.
+
+## 📚 Documentation
+
+- [Getting Started Guide](docs/getting-started.md)
+- [Query Builder Documentation](docs/query-builder.md)
+- [Eloquent ORM Guide](docs/eloquent.md)
+- [Migrations Guide](docs/migrations.md)
+- [Relationships Documentation](docs/relationships.md)
+- [Coding Standards](CODING_STANDARDS.md) - Required reading for contributors
+
 ## 📝 License
 
 guruORM is open-sourced software licensed under the [MIT license](LICENSE).

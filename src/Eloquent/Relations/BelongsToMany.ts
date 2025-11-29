@@ -69,6 +69,14 @@ export class BelongsToMany extends Relation {
    */
   addEagerConstraints(models: Model[]): void {
     const keys = models.map(model => model.getAttribute(this.parentKey));
+    
+    // Select related model columns and pivot columns
+    this.query.select(`${this.related.getTable()}.*`, `${this.table}.${this.foreignPivotKey}`, `${this.table}.${this.relatedPivotKey}`);
+    
+    // Add join for pivot table
+    this.query.join(this.table, `${this.related.getTable()}.${this.relatedKey}`, '=', `${this.table}.${this.relatedPivotKey}`);
+    
+    // Filter by parent keys
     this.query.whereIn(`${this.table}.${this.foreignPivotKey}`, keys);
   }
 
@@ -165,6 +173,38 @@ export class BelongsToMany extends Relation {
 
     // Attach new models
     const attach = ids.filter(id => !current.includes(id));
+    if (attach.length > 0) {
+      await this.attachNew(attach);
+      changes.attached = attach;
+    }
+
+    return changes;
+  }
+
+  /**
+   * Toggle the relationship between the parent and the given IDs
+   */
+  async toggle(ids: any[]): Promise<any> {
+    const changes = {
+      attached: [] as any[],
+      detached: [] as any[]
+    };
+
+    // Ensure ids is an array
+    const idsArray = Array.isArray(ids) ? ids : [ids];
+
+    // Get current IDs
+    const current = await this.getCurrentIds();
+
+    // Detach IDs that are currently attached
+    const detach = idsArray.filter(id => current.includes(id));
+    if (detach.length > 0) {
+      await this.detach(detach);
+      changes.detached = detach;
+    }
+
+    // Attach IDs that are not currently attached
+    const attach = idsArray.filter(id => !current.includes(id));
     if (attach.length > 0) {
       await this.attachNew(attach);
       changes.attached = attach;

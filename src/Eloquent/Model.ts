@@ -69,6 +69,66 @@ export class Model {
     this.syncOriginal();
     this.fill(attributes);
     this.bootIfNotBooted();
+    
+    // Return a Proxy to intercept property access for attributes
+    return new Proxy(this, {
+      get(target: any, prop: string | symbol, receiver: any) {
+        // If it's a symbol, return it directly
+        if (typeof prop === 'symbol') {
+          return target[prop];
+        }
+        
+        // List of known Model class properties
+        const modelProperties = [
+          'table', 'primaryKey', 'keyType', 'incrementing', 'timestamps', 'dateFormat', 'connection',
+          'fillable', 'guarded', 'hidden', 'visible', 'appends', 'casts', 'dispatchesEvents',
+          'attributes', 'original', 'relations', 'exists', 'wasRecentlyCreated'
+        ];
+        
+        // If it's a model property, return it directly
+        if (modelProperties.includes(prop as string)) {
+          return Reflect.get(target, prop, receiver);
+        }
+        
+        // Try getAttribute first (it checks LOADED relations, then attributes)
+        // Use Reflect to avoid Proxy recursion
+        const getAttribute = Reflect.get(target, 'getAttribute', receiver);
+        const value = getAttribute.call(target, prop);
+        
+        // If getAttribute returned something (attribute or loaded relation), use it
+        if (value !== undefined) {
+          return value;
+        }
+        
+        // Otherwise, return the property (methods, etc.)
+        return Reflect.get(target, prop, receiver);
+      },
+      
+      set(target: any, prop: string | symbol, value: any) {
+        // If it's a symbol, set it directly
+        if (typeof prop === 'symbol') {
+          target[prop] = value;
+          return true;
+        }
+        
+        // List of known Model class properties
+        const modelProperties = [
+          'table', 'primaryKey', 'keyType', 'incrementing', 'timestamps', 'dateFormat', 'connection',
+          'fillable', 'guarded', 'hidden', 'visible', 'appends', 'casts', 'dispatchesEvents',
+          'attributes', 'original', 'relations', 'exists', 'wasRecentlyCreated'
+        ];
+        
+        // If it's a known model property or method, set it directly
+        if (modelProperties.includes(prop as string) || typeof target[prop] === 'function') {
+          target[prop] = value;
+          return true;
+        }
+        
+        // Otherwise, set it as an attribute
+        target.setAttribute(prop, value);
+        return true;
+      }
+    });
   }
 
   /**
@@ -838,7 +898,8 @@ export class Model {
    * Create a new instance of the model
    */
   static async create<T extends Model>(this: new (attributes?: Record<string, any>) => T, attributes: Record<string, any> = {}): Promise<T> {
-    const model = new this(attributes);
+    const model = new this();
+    model.fill(attributes);
     await model.save();
     return model;
   }
@@ -911,6 +972,188 @@ export class Model {
   }
 
   /**
+   * Add a "where in" clause to the query
+   */
+  static whereIn<T extends Model>(
+    this: new (attributes?: Record<string, any>) => T,
+    column: string,
+    values: any[]
+  ): EloquentBuilder {
+    const model = new this();
+    return model.newQuery().whereIn(column, values);
+  }
+
+  /**
+   * Add a "where not in" clause to the query
+   */
+  static whereNotIn<T extends Model>(
+    this: new (attributes?: Record<string, any>) => T,
+    column: string,
+    values: any[]
+  ): EloquentBuilder {
+    const model = new this();
+    return model.newQuery().whereNotIn(column, values);
+  }
+
+  /**
+   * Add a "where null" clause to the query
+   */
+  static whereNull<T extends Model>(
+    this: new (attributes?: Record<string, any>) => T,
+    column: string
+  ): EloquentBuilder {
+    const model = new this();
+    return model.newQuery().whereNull(column);
+  }
+
+  /**
+   * Add a "where not null" clause to the query
+   */
+  static whereNotNull<T extends Model>(
+    this: new (attributes?: Record<string, any>) => T,
+    column: string
+  ): EloquentBuilder {
+    const model = new this();
+    return model.newQuery().whereNotNull(column);
+  }
+
+  /**
+   * Add a "where between" clause to the query
+   */
+  static whereBetween<T extends Model>(
+    this: new (attributes?: Record<string, any>) => T,
+    column: string,
+    values: [any, any]
+  ): EloquentBuilder {
+    const model = new this();
+    return model.newQuery().whereBetween(column, values);
+  }
+
+  /**
+   * Add an "order by" clause to the query
+   */
+  static orderBy<T extends Model>(
+    this: new (attributes?: Record<string, any>) => T,
+    column: string,
+    direction: 'asc' | 'desc' = 'asc'
+  ): EloquentBuilder {
+    const model = new this();
+    return model.newQuery().orderBy(column, direction);
+  }
+
+  /**
+   * Set the "limit" value of the query
+   */
+  static limit<T extends Model>(
+    this: new (attributes?: Record<string, any>) => T,
+    value: number
+  ): EloquentBuilder {
+    const model = new this();
+    return model.newQuery().limit(value);
+  }
+
+  /**
+   * Set the "offset" value of the query
+   */
+  static offset<T extends Model>(
+    this: new (attributes?: Record<string, any>) => T,
+    value: number
+  ): EloquentBuilder {
+    const model = new this();
+    return model.newQuery().offset(value);
+  }
+
+  /**
+   * Set the columns to be selected
+   */
+  static select<T extends Model>(
+    this: new (attributes?: Record<string, any>) => T,
+    ...columns: string[]
+  ): EloquentBuilder {
+    const model = new this();
+    return model.newQuery().select(...columns);
+  }
+
+  /**
+   * Force the query to only return distinct results
+   */
+  static distinct<T extends Model>(
+    this: new (attributes?: Record<string, any>) => T
+  ): EloquentBuilder {
+    const model = new this();
+    return model.newQuery().distinct();
+  }
+
+  /**
+   * Add a "group by" clause to the query
+   */
+  static groupBy<T extends Model>(
+    this: new (attributes?: Record<string, any>) => T,
+    ...groups: string[]
+  ): EloquentBuilder {
+    const model = new this();
+    return model.newQuery().groupBy(...groups);
+  }
+
+  /**
+   * Add subselect queries to count the relations
+   */
+  static withCount<T extends Model>(
+    this: new (attributes?: Record<string, any>) => T,
+    relations: string | string[] | Record<string, Function>
+  ): EloquentBuilder {
+    const model = new this();
+    return model.newQuery().withCount(relations);
+  }
+
+  /**
+   * Add a where clause based on a relationship's existence
+   */
+  static has<T extends Model>(
+    this: new (attributes?: Record<string, any>) => T,
+    relation: string,
+    operator: string = '>=',
+    count: number = 1
+  ): EloquentBuilder {
+    const model = new this();
+    return model.newQuery().has(relation, operator, count);
+  }
+
+  /**
+   * Add a where clause that requires a relationship to NOT exist
+   */
+  static doesntHave<T extends Model>(
+    this: new (attributes?: Record<string, any>) => T,
+    relation: string
+  ): EloquentBuilder {
+    const model = new this();
+    return model.newQuery().doesntHave(relation);
+  }
+
+  /**
+   * Add a where clause based on a relationship's existence with callback
+   */
+  static whereHas<T extends Model>(
+    this: new (attributes?: Record<string, any>) => T,
+    relation: string,
+    callback?: Function,
+    operator: string = '>=',
+    count: number = 1
+  ): EloquentBuilder {
+    const model = new this();
+    return model.newQuery().whereHas(relation, callback, operator, count);
+  }
+
+  static whereDoesntHave<T extends Model>(
+    this: new (attributes?: Record<string, any>) => T,
+    relation: string,
+    callback?: Function
+  ): EloquentBuilder {
+    const model = new this();
+    return model.newQuery().whereDoesntHave(relation, callback);
+  }
+
+  /**
    * Get the first record matching the attributes
    */
   static first<T extends Model>(this: new (attributes?: Record<string, any>) => T, columns: string[] = ['*']): Promise<T | null> {
@@ -971,14 +1214,120 @@ export class Model {
    * Create a new instance of the given model
    */
   newInstance(attributes: Record<string, any> = {}, exists = false): this {
+    // Create base model instance using Object.create to copy properties
     const model = Object.create(Object.getPrototypeOf(this));
-    Object.assign(model, this);
     
-    model.attributes = attributes;
-    model.exists = exists;
+    // Copy model properties as non-enumerable to keep Object.keys() clean
+    const propertiesToCopy = [
+      'table', 'primaryKey', 'keyType', 'incrementing', 'timestamps', 'dateFormat', 'connection',
+      'fillable', 'guarded', 'hidden', 'visible', 'appends', 'casts', 'dispatchesEvents',
+      'original', 'relations', 'wasRecentlyCreated'
+    ];
+    
+    for (const prop of propertiesToCopy) {
+      if (prop in this) {
+        Object.defineProperty(model, prop, {
+          value: this[prop as keyof this],
+          writable: true,
+          enumerable: false,
+          configurable: true
+        });
+      }
+    }
+    
+    // Set attributes and exists as non-enumerable
+    Object.defineProperty(model, 'attributes', {
+      value: attributes,
+      writable: true,
+      enumerable: false,
+      configurable: true
+    });
+    
+    Object.defineProperty(model, 'exists', {
+      value: exists,
+      writable: true,
+      enumerable: false,
+      configurable: true
+    });
+    
     model.syncOriginal();
-
-    return model;
+    
+    // Manually wrap in Proxy (same logic as constructor)
+    return new Proxy(model, {
+      get(target: any, prop: string | symbol, receiver: any) {
+        if (typeof prop === 'symbol') {
+          return Reflect.get(target, prop, receiver);
+        }
+        
+        const modelProperties = [
+          'table', 'primaryKey', 'keyType', 'incrementing', 'timestamps', 'dateFormat', 'connection',
+          'fillable', 'guarded', 'hidden', 'visible', 'appends', 'casts', 'dispatchesEvents',
+          'attributes', 'original', 'relations', 'exists', 'wasRecentlyCreated'
+        ];
+        
+        if (modelProperties.includes(prop as string)) {
+          return Reflect.get(target, prop, receiver);
+        }
+        
+        // Try getAttribute (checks LOADED relations, then attributes)
+        const getAttribute = Reflect.get(target, 'getAttribute', receiver);
+        const value = getAttribute.call(target, prop);
+        
+        if (value !== undefined) {
+          return value;
+        }
+        
+        return Reflect.get(target, prop, receiver);
+      },
+      
+      set(target: any, prop: string | symbol, value: any) {
+        if (typeof prop === 'symbol') {
+          target[prop] = value;
+          return true;
+        }
+        
+        const modelProperties = [
+          'table', 'primaryKey', 'keyType', 'incrementing', 'timestamps', 'dateFormat', 'connection',
+          'fillable', 'guarded', 'hidden', 'visible', 'appends', 'casts', 'dispatchesEvents',
+          'attributes', 'original', 'relations', 'exists', 'wasRecentlyCreated'
+        ];
+        
+        if (modelProperties.includes(prop as string) || typeof target[prop] === 'function') {
+          target[prop] = value;
+          return true;
+        }
+        
+        target.setAttribute(prop, value);
+        return true;
+      },
+      
+      ownKeys(target: any) {
+        // Return only attribute keys for Object.keys() to work correctly
+        return Object.keys(target.attributes || {});
+      },
+      
+      has(target: any, prop: string | symbol) {
+        // Check if property exists in attributes
+        if (typeof prop === 'string' && target.attributes && prop in target.attributes) {
+          return true;
+        }
+        return Reflect.has(target, prop);
+      },
+      
+      getOwnPropertyDescriptor(target: any, prop: string | symbol) {
+        // For attributes, return a descriptor that makes them enumerable
+        if (typeof prop === 'string' && target.attributes && prop in target.attributes) {
+          return {
+            enumerable: true,
+            configurable: true,
+            writable: true,
+            value: target.attributes[prop]
+          };
+        }
+        // For other properties, return undefined so they're not enumerable
+        return undefined;
+      }
+    }) as this;
   }
 
   /**
@@ -1334,11 +1683,46 @@ export class Model {
                           Object.keys(relations);
 
     for (const relation of relationsArray) {
-      if (typeof (this as any)[relation] === 'function') {
-        const relationInstance = (this as any)[relation]();
+      // Check if this is a nested relation (e.g., 'posts.comments')
+      if (relation.includes('.')) {
+        const segments = relation.split('.');
+        const firstRelation = segments[0];
+        const nestedRelation = segments.slice(1).join('.');
         
-        if (relationInstance && typeof relationInstance.getResults === 'function') {
-          this.relations[relation] = await relationInstance.getResults();
+        // Load the first level relation if not already loaded
+        if (!this.relations[firstRelation]) {
+          if (typeof (this as any)[firstRelation] === 'function') {
+            const relationInstance = (this as any)[firstRelation]();
+            
+            if (relationInstance && typeof relationInstance.getResults === 'function') {
+              this.relations[firstRelation] = await relationInstance.getResults();
+            }
+          }
+        }
+        
+        // Load nested relations on the first level relation
+        const firstLevelRelation = this.relations[firstRelation];
+        if (firstLevelRelation) {
+          if (Array.isArray(firstLevelRelation)) {
+            // If it's a collection, load nested relations for each item
+            for (const relatedModel of firstLevelRelation) {
+              if (relatedModel && typeof relatedModel.load === 'function') {
+                await relatedModel.load(nestedRelation);
+              }
+            }
+          } else if (typeof firstLevelRelation.load === 'function') {
+            // If it's a single model, load the nested relation
+            await firstLevelRelation.load(nestedRelation);
+          }
+        }
+      } else {
+        // Regular single-level relation
+        if (typeof (this as any)[relation] === 'function') {
+          const relationInstance = (this as any)[relation]();
+          
+          if (relationInstance && typeof relationInstance.getResults === 'function') {
+            this.relations[relation] = await relationInstance.getResults();
+          }
         }
       }
     }

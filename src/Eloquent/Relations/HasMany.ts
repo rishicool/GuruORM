@@ -97,4 +97,13 @@ export class HasMany extends Relation {
 
     return new Collection(...instances);
   }
+
+  /**
+   * Save a related model instance
+   */
+  async save(model: Model): Promise<Model> {
+    model.setAttribute(this.foreignKey, this.parent.getAttribute(this.localKey));
+    await model.save();
+    return model;
+  }
 }
