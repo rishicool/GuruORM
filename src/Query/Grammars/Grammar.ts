@@ -445,4 +445,44 @@ export class Grammar {
     const whereBindings = bindings.where || [];
     return [...updateBindings, ...whereBindings];
   }
+
+  /**
+   * Compile the "group by" portions of the query
+   */
+  protected compileGroups(query: Builder, groups: any[]): string {
+    if (!groups || groups.length === 0) {
+      return "";
+    }
+
+    return `group by ${groups.map((group) => this.wrap(group)).join(", ")}`;
+  }
+
+  /**
+   * Compile the "having" portions of the query
+   */
+  protected compileHavings(query: Builder, havings: any[]): string {
+    if (!havings || havings.length === 0) {
+      return "";
+    }
+
+    const sql = havings.map((having) => this.compileHaving(having)).join(" ");
+    return `having ${sql}`;
+  }
+
+  /**
+   * Compile a single having clause
+   */
+  protected compileHaving(having: any): string {
+    if (having.type === "Raw") {
+      return having.sql;
+    }
+
+    if (having.type === "between") {
+      return `${this.wrap(having.column)} ${having.not ? "not " : ""}between ? and ?`;
+    }
+
+    // Basic having
+    const column = this.wrap(having.column);
+    return `${having.boolean} ${column} ${having.operator} ?`;
+  }
 }
