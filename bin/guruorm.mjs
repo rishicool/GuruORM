@@ -8,6 +8,7 @@ import { Command } from 'commander';
 import { MigrationMaker } from '../dist/CLI/MigrationMaker.js';
 import { SeederMaker } from '../dist/CLI/SeederMaker.js';
 import { FactoryMaker } from '../dist/CLI/FactoryMaker.js';
+import { MigrationRunner } from '../dist/CLI/MigrationRunner.js';
 import * as path from 'path';
 import { fileURLToPath } from 'url';
 
@@ -38,19 +39,19 @@ program
   .option('--force', 'Force the operation to run in production')
   .option('--step <step>', 'Force the migrations to be run so they can be rolled back individually', parseInt)
   .option('--pretend', 'Dump the SQL queries that would be run')
-  .action((options) => {
-    console.log('Running migrations...', options);
-    
-    if (!options.force && process.env.NODE_ENV === 'production') {
-      console.error('❌ Use --force to run migrations in production');
+  .action(async (options) => {
+    try {
+      if (!options.force && process.env.NODE_ENV === 'production') {
+        console.error('❌ Use --force to run migrations in production');
+        process.exit(1);
+      }
+      
+      const runner = new MigrationRunner();
+      await runner.run(options);
+    } catch (error) {
+      console.error('Migration failed:', error.message);
       process.exit(1);
     }
-    
-    if (options.step) {
-      console.log(`   Running next ${options.step} migration(s)...`);
-    }
-    
-    console.log('This feature will be implemented in Phase 4');
   });
 
 program
@@ -58,19 +59,19 @@ program
   .description('Rollback the last database migration')
   .option('--step <step>', 'The number of migrations to be reverted', parseInt)
   .option('--force', 'Force the operation to run in production')
-  .action((options) => {
-    console.log('Rolling back migrations...', options);
-    
-    if (!options.force && process.env.NODE_ENV === 'production') {
-      console.error('❌ Use --force to rollback migrations in production');
+  .action(async (options) => {
+    try {
+      if (!options.force && process.env.NODE_ENV === 'production') {
+        console.error('❌ Use --force to rollback migrations in production');
+        process.exit(1);
+      }
+      
+      const runner = new MigrationRunner();
+      await runner.rollback(options);
+    } catch (error) {
+      console.error('Rollback failed:', error.message);
       process.exit(1);
     }
-    
-    if (options.step) {
-      console.log(`   Rolling back ${options.step} migration(s)...`);
-    }
-    
-    console.log('This feature will be implemented in Phase 4');
   });
 
 program
@@ -79,24 +80,18 @@ program
   .option('--seed', 'Seed the database after migrating')
   .option('--force', 'Force the operation to run in production')
   .action(async (options) => {
-    console.log('🔄 Dropping all tables and refreshing database...');
-    console.log('');
-    console.log('⚠️  This will drop all tables!');
-    
-    if (!options.force && process.env.NODE_ENV === 'production') {
-      console.error('❌ Use --force to run in production');
+    try {
+      if (!options.force && process.env.NODE_ENV === 'production') {
+        console.error('❌ Use --force to run in production');
+        process.exit(1);
+      }
+      
+      const runner = new MigrationRunner();
+      await runner.fresh(options);
+    } catch (error) {
+      console.error('Fresh migration failed:', error.message);
       process.exit(1);
     }
-    
-    console.log('');
-    console.log('Implementation:');
-    console.log('  1. Run Schema::dropAllTables()');
-    console.log('  2. Run all migrations');
-    if (options.seed) {
-      console.log('  3. Run db:seed');
-    }
-    console.log('');
-    console.log('This feature requires a database connection setup');
   });
 
 program
@@ -106,38 +101,50 @@ program
   .option('--step <step>', 'The number of migrations to rollback')
   .option('--force', 'Force the operation to run in production')
   .action(async (options) => {
-    console.log('🔄 Resetting and re-running migrations...');
-    console.log('');
-    
-    if (!options.force && process.env.NODE_ENV === 'production') {
-      console.error('❌ Use --force to run in production');
+    try {
+      if (!options.force && process.env.NODE_ENV === 'production') {
+        console.error('❌ Use --force to run in production');
+        process.exit(1);
+      }
+      
+      const runner = new MigrationRunner();
+      await runner.refresh(options);
+    } catch (error) {
+      console.error('Refresh failed:', error.message);
       process.exit(1);
     }
-    
-    console.log('Implementation:');
-    console.log('  1. Run migrate:reset');
-    console.log('  2. Run migrate');
-    if (options.seed) {
-      console.log('  3. Run db:seed');
-    }
-    console.log('');
-    console.log('This feature requires a database connection setup');
   });
 
 program
   .command('migrate:reset')
   .description('Rollback all database migrations')
-  .action(() => {
-    console.log('Resetting database...');
-    console.log('This feature will be implemented in Phase 4');
+  .option('--force', 'Force the operation to run in production')
+  .action(async (options) => {
+    try {
+      if (!options.force && process.env.NODE_ENV === 'production') {
+        console.error('❌ Use --force to reset migrations in production');
+        process.exit(1);
+      }
+      
+      const runner = new MigrationRunner();
+      await runner.reset(options);
+    } catch (error) {
+      console.error('Reset failed:', error.message);
+      process.exit(1);
+    }
   });
 
 program
   .command('migrate:status')
   .description('Show the status of each migration')
-  .action(() => {
-    console.log('Migration status:');
-    console.log('This feature will be implemented in Phase 4');
+  .action(async () => {
+    try {
+      const runner = new MigrationRunner();
+      await runner.status();
+    } catch (error) {
+      console.error('Status check failed:', error.message);
+      process.exit(1);
+    }
   });
 
 // Make migration command

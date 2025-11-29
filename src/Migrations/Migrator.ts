@@ -338,9 +338,10 @@ export class Migrator {
    */
   protected async getNextBatchNumber(): Promise<number> {
     const result: any = await this.connection.table(this.migrationTable)
-      .max('batch as max_batch');
+      .selectRaw('MAX(batch) as max_batch')
+      .first();
 
-    const maxBatch = Array.isArray(result) && result.length > 0 ? result[0].max_batch : null;
+    const maxBatch = result?.max_batch;
     return (maxBatch || 0) + 1;
   }
 
@@ -349,9 +350,10 @@ export class Migrator {
    */
   protected async getLastBatchNumber(): Promise<number> {
     const result: any = await this.connection.table(this.migrationTable)
-      .max('batch as max_batch');
+      .selectRaw('MAX(batch) as max_batch')
+      .first();
 
-    const maxBatch = Array.isArray(result) && result.length > 0 ? result[0].max_batch : null;
+    const maxBatch = result?.max_batch;
     return maxBatch || 0;
   }
 
