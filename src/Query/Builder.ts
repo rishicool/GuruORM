@@ -1189,6 +1189,12 @@ export class Builder {
     const sql = this.grammar.compileInsertGetId(this, values, sequence);
     const bindings = this.grammar.prepareBindingsForInsert(this.bindings, [values]);
 
+    // For MySQL, use the connection's insertGetId method if available
+    if (this.connection.getDriverName() === 'mysql' && typeof (this.connection as any).insertGetId === 'function') {
+      return (this.connection as any).insertGetId(sql, bindings);
+    }
+
+    // For PostgreSQL and others that support RETURNING
     const results = await this.connection.select(sql, bindings);
     
     if (results && results.length > 0) {

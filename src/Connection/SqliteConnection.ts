@@ -12,6 +12,12 @@ export class SqliteConnection extends Connection {
 
   constructor(config: ConnectionConfig) {
     super(config);
+    
+    // Initialize grammars and processor
+    this.useDefaultQueryGrammar();
+    this.useDefaultSchemaGrammar();
+    this.useDefaultPostProcessor();
+    
     // Dynamic import in constructor won't work properly
     // Initialize synchronously in first query
   }

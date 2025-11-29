@@ -13,6 +13,12 @@ export class MySqlConnection extends Connection {
 
   constructor(config: ConnectionConfig) {
     super(config);
+    
+    // Initialize grammars and processor
+    this.useDefaultQueryGrammar();
+    this.useDefaultSchemaGrammar();
+    this.useDefaultPostProcessor();
+    
     this.createConnection();
   }
 
@@ -60,6 +66,26 @@ export class MySqlConnection extends Connection {
    */
   async insert(query: string, bindings: any[] = []): Promise<boolean> {
     return this.statement(query, bindings);
+  }
+
+  /**
+   * Insert a record and return the last insert ID (MySQL-specific)
+   */
+  async insertGetId(query: string, bindings: any[] = []): Promise<number> {
+    const startTime = Date.now();
+    
+    try {
+      const [result] = await this.getClient().execute(query, bindings);
+      
+      const time = Date.now() - startTime;
+      this.logQuery(query, bindings, time);
+      
+      // MySQL returns insertId in the result
+      const insertId = (result as any).insertId;
+      return typeof insertId === 'number' ? insertId : parseInt(String(insertId), 10);
+    } catch (error) {
+      throw this.handleQueryException(error as Error, query, bindings);
+    }
   }
 
   /**

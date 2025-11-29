@@ -15,6 +15,12 @@ export class SqlServerConnection extends Connection {
 
   constructor(config: ConnectionConfig) {
     super(config);
+    
+    // Initialize grammars and processor
+    this.useDefaultQueryGrammar();
+    this.useDefaultSchemaGrammar();
+    this.useDefaultPostProcessor();
+    
     // Start connection but don't await in constructor
     this.poolPromise = this.createConnection();
   }
