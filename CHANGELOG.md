@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [1.6.0] - 2024-11-29
 
+### 🎉 JavaScript & TypeScript - Works with Both!
+
+**GuruORM now explicitly supports both JavaScript and TypeScript projects!**
+- ✅ No TypeScript compilation required
+- ✅ Works with plain CommonJS `require()`
+- ✅ Works with ES modules `import`
+- ✅ Full feature parity in both languages
+- ✅ Optional type safety with TypeScript
+
 ### Added - Eloquent Models (95% Laravel Parity)
 - **Event Management**
   - `withoutTimestamps()` - Execute callbacks without updating timestamps
