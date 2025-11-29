@@ -60,9 +60,7 @@ export class Grammar {
    * Wrap the given value segments
    */
   protected wrapSegments(segments: string[]): string {
-    return segments
-      .map((segment, index) => (index === 0 ? this.wrapTable(segment) : this.wrapValue(segment)))
-      .join('.');
+    return segments.map((segment) => this.wrapValue(segment)).join("." );
   }
 
   /**
@@ -108,42 +106,48 @@ export class Grammar {
    * Compile a select query into SQL
    */
   compileSelect(query: Builder): string {
-    if (query['columns'].length === 0) {
-      query['columns'] = ['*'];
+    if (query["columns"].length === 0) {
+      query["columns"] = ["*"];
     }
 
     // If we have unions, we need to wrap the query
-    if (query['unions'] && query['unions'].length > 0) {
+    if (query["unions"] && query["unions"].length > 0) {
       return this.compileUnionAggregate(query);
     }
 
     const sql: string[] = [];
 
+    // Component to property mapping
+    const componentMap: { [key: string]: string } = {
+      columns: "columns",
+      from: "fromTable",
+      joins: "joins",
+      wheres: "wheres",
+      groups: "groups",
+      havings: "havings",
+      orders: "orders",
+      limit: "limitValue",
+      offset: "offsetValue",
+      lock: "lock",
+    };
+
     // Compile each component of the query
-    const components = [
-      'columns',
-      'from',
-      'joins',
-      'wheres',
-      'groups',
-      'havings',
-      'orders',
-      'limit',
-      'offset',
-      'lock',
-    ];
+    const components = Object.keys(componentMap);
 
     components.forEach((component) => {
+      const propertyName = componentMap[component];
       const method = `compile${component.charAt(0).toUpperCase() + component.slice(1)}`;
-      if (typeof (this as any)[method] === 'function') {
-        const compiled = (this as any)[method](query, query[component as keyof Builder]);
+      
+      if (typeof (this as any)[method] === "function") {
+        const value = query[propertyName as keyof Builder];
+        const compiled = (this as any)[method](query, value);
         if (compiled) {
           sql.push(compiled);
         }
       }
     });
 
-    return sql.join(' ');
+    return sql.join(" ");
   }
 
   /**
@@ -210,13 +214,14 @@ export class Grammar {
   /**
    * Compile the "from" portion of the query
    */
-  protected compileFrom(query: Builder, table: string): string {
+  protected compileFrom(query: Builder): string {
+    const table = query["fromTable"];
     if (!table) {
-      return '';
+      return "";
     }
     
     const wrappedTable = this.wrapTable(table);
-    const alias = query['fromAlias'] ? ` as ${this.wrap(query['fromAlias'])}` : '';
+    const alias = query["fromAlias"] ? ` as ${this.wrap(query["fromAlias"])}` : "";
     return `from ${wrappedTable}${alias}`;
   }
 

@@ -297,6 +297,161 @@ export class Builder {
   }
 
   /**
+   * Add a where clause with a subquery
+   */
+  whereSub(column: string, operator: string, callback: (query: Builder) => void, boolean: 'and' | 'or' = 'and'): this {
+    const query = this.newQuery();
+    callback(query);
+
+    this.wheres.push({
+      type: 'Sub',
+      column,
+      operator,
+      query,
+      boolean,
+    });
+
+    this.addBinding(query.getBindings(), 'where');
+    return this;
+  }
+
+  /**
+   * Add a where in clause with a subquery
+   */
+  whereInSub(column: string, callback: (query: Builder) => void, boolean: 'and' | 'or' = 'and', not = false): this {
+    const type = not ? 'NotInSub' : 'InSub';
+    const query = this.newQuery();
+    callback(query);
+
+    this.wheres.push({
+      type,
+      column,
+      query,
+      boolean,
+    });
+
+    this.addBinding(query.getBindings(), 'where');
+    return this;
+  }
+
+  /**
+   * Add a where not in clause with a subquery
+   */
+  whereNotInSub(column: string, callback: (query: Builder) => void, boolean: 'and' | 'or' = 'and'): this {
+    return this.whereInSub(column, callback, boolean, true);
+  }
+
+  /**
+   * Add a where exists clause
+   */
+  whereExists(callback: (query: Builder) => void, boolean: 'and' | 'or' = 'and', not = false): this {
+    const query = this.newQuery();
+    callback(query);
+
+    this.wheres.push({
+      type: not ? 'NotExists' : 'Exists',
+      query,
+      boolean,
+    });
+
+    this.addBinding(query.getBindings(), 'where');
+    return this;
+  }
+
+  /**
+   * Add a where not exists clause
+   */
+  whereNotExists(callback: (query: Builder) => void, boolean: 'and' | 'or' = 'and'): this {
+    return this.whereExists(callback, boolean, true);
+  }
+
+  /**
+   * Add a where between clause
+   */
+  whereBetween(column: string, values: [any, any], boolean: 'and' | 'or' = 'and', not = false): this {
+    const type = not ? 'NotBetween' : 'Between';
+
+    this.wheres.push({
+      type,
+      column,
+      values,
+      boolean,
+    });
+
+    this.addBinding(values, 'where');
+    return this;
+  }
+
+  /**
+   * Add a where not between clause
+   */
+  whereNotBetween(column: string, values: [any, any], boolean: 'and' | 'or' = 'and'): this {
+    return this.whereBetween(column, values, boolean, true);
+  }
+
+  /**
+   * Add a where date clause
+   */
+  whereDate(column: string, operator: string, value?: any, boolean: 'and' | 'or' = 'and'): this {
+    if (value === undefined) {
+      value = operator;
+      operator = '=';
+    }
+
+    this.wheres.push({
+      type: 'Date',
+      column,
+      operator,
+      value,
+      boolean,
+    });
+
+    this.addBinding(value, 'where');
+    return this;
+  }
+
+  /**
+   * Add a where time clause
+   */
+  whereTime(column: string, operator: string, value?: any, boolean: 'and' | 'or' = 'and'): this {
+    if (value === undefined) {
+      value = operator;
+      operator = '=';
+    }
+
+    this.wheres.push({
+      type: 'Time',
+      column,
+      operator,
+      value,
+      boolean,
+    });
+
+    this.addBinding(value, 'where');
+    return this;
+  }
+
+  /**
+   * Add a where column clause
+   */
+  whereColumn(first: string, operator: string, second?: string, boolean: 'and' | 'or' = 'and'): this {
+    if (second === undefined) {
+      second = operator;
+      operator = '=';
+    }
+
+    this.wheres.push({
+      type: 'Column',
+      first,
+      operator,
+      second,
+      boolean,
+    });
+
+    return this;
+  }
+
+  /**
    * Add an "order by" clause to the query
    */
   orderBy(column: string, direction: 'asc' | 'desc' = 'asc'): this {
@@ -313,6 +468,95 @@ export class Builder {
    */
   orderByDesc(column: string): this {
     return this.orderBy(column, 'desc');
+  }
+
+  /**
+   * Add a "group by" clause to the query
+   */
+  groupBy(...groups: string[]): this {
+    groups.forEach((group) => {
+      this.groups.push(group);
+    });
+    return this;
+  }
+
+  /**
+   * Add a "having" clause to the query
+   */
+  having(column: string, operator?: any, value?: any, boolean: 'and' | 'or' = 'and'): this {
+    if (value === undefined) {
+      value = operator;
+      operator = '=';
+    }
+
+    this.havings.push({
+      type: 'Basic',
+      column,
+      operator,
+      value,
+      boolean,
+    });
+
+    this.addBinding(value, 'having');
+    return this;
+  }
+
+  /**
+   * Add a raw "having" clause to the query
+   */
+  havingRaw(sql: string, bindings: any[] = [], boolean: 'and' | 'or' = 'and'): this {
+    this.havings.push({
+      type: 'Raw',
+      sql,
+      boolean,
+    });
+
+    this.addBinding(bindings, 'having');
+    return this;
+  }
+
+  /**
+   * Add a raw select expression
+   */
+  selectRaw(expression: string, bindings: any[] = []): this {
+    this.columns.push(new Expression(expression));
+    this.addBinding(bindings, 'select');
+    return this;
+  }
+
+  /**
+   * Add a raw where clause
+   */
+  whereRaw(sql: string, bindings: any[] = [], boolean: 'and' | 'or' = 'and'): this {
+    this.wheres.push({
+      type: 'Raw',
+      sql,
+      boolean,
+    });
+
+    this.addBinding(bindings, 'where');
+    return this;
+  }
+
+  /**
+   * Add a raw order by clause
+   */
+  orderByRaw(sql: string, bindings: any[] = []): this {
+    this.orders.push({
+      type: 'Raw',
+      sql,
+    });
+
+    this.addBinding(bindings, 'order');
+    return this;
+  }
+
+  /**
+   * Force the query to only return distinct results
+   */
+  distinct(): this {
+    this.columns.unshift('distinct');
+    return this;
   }
 
   /**
@@ -566,5 +810,155 @@ export class Builder {
    */
   getProcessor(): Processor {
     return this.processor;
+  }
+
+  /**
+   * Paginate the given query
+   */
+  async paginate(perPage: number = 15, page: number = 1): Promise<{ data: any[]; total: number; perPage: number; currentPage: number; lastPage: number }> {
+    const total = await this.cloneWithout(['columns', 'orders']).count();
+    const results = await this.forPage(page, perPage).get();
+
+    return {
+      data: results,
+      total,
+      perPage,
+      currentPage: page,
+      lastPage: Math.ceil(total / perPage),
+    };
+  }
+
+  /**
+   * Get a paginator only supporting simple next and previous links
+   */
+  async simplePaginate(perPage: number = 15, page: number = 1): Promise<{ data: any[]; perPage: number; currentPage: number; hasMore: boolean }> {
+    const results = await this.forPage(page, perPage + 1).get();
+    const hasMore = results.length > perPage;
+
+    if (hasMore) {
+      results.pop();
+    }
+
+    return {
+      data: results,
+      perPage,
+      currentPage: page,
+      hasMore,
+    };
+  }
+
+  /**
+   * Set the limit and offset for a given page
+   */
+  forPage(page: number, perPage: number = 15): this {
+    return this.offset((page - 1) * perPage).limit(perPage);
+  }
+
+  /**
+   * Chunk the results of the query
+   */
+  async chunk(count: number, callback: (results: any[], page: number) => boolean | void): Promise<boolean> {
+    let page = 1;
+
+    do {
+      const results = await this.forPage(page, count).get();
+
+      if (results.length === 0) {
+        break;
+      }
+
+      if (callback(results, page) === false) {
+        return false;
+      }
+
+      page++;
+    } while (true);
+
+    return true;
+  }
+
+  /**
+   * Chunk the results of a query by comparing IDs
+   */
+  async chunkById(count: number, callback: (results: any[], lastId?: any) => boolean | void, column: string = 'id'): Promise<boolean> {
+    let lastId: any = null;
+
+    do {
+      const clone = this.cloneWithout([]);
+      
+      if (lastId !== null) {
+        clone.where(column, '>', lastId);
+      }
+
+      const results = await clone.orderBy(column).limit(count).get();
+
+      if (results.length === 0) {
+        break;
+      }
+
+      if (callback(results, lastId) === false) {
+        return false;
+      }
+
+      lastId = results[results.length - 1][column];
+    } while (true);
+
+    return true;
+  }
+
+  /**
+   * Execute the query and get all results lazily
+   */
+  async *lazy(chunkSize: number = 1000): AsyncGenerator<any> {
+    let page = 1;
+
+    while (true) {
+      const results = await this.forPage(page, chunkSize).get();
+
+      if (results.length === 0) {
+        break;
+      }
+
+      for (const result of results) {
+        yield result;
+      }
+
+      if (results.length < chunkSize) {
+        break;
+      }
+
+      page++;
+    }
+  }
+
+  /**
+   * Execute the query and get all results lazily by ID
+   */
+  async *lazyById(chunkSize: number = 1000, column: string = 'id'): AsyncGenerator<any> {
+    let lastId: any = null;
+
+    while (true) {
+      const clone = this.cloneWithout([]);
+      
+      if (lastId !== null) {
+        clone.where(column, '>', lastId);
+      }
+
+      const results = await clone.orderBy(column).limit(chunkSize).get();
+
+      if (results.length === 0) {
+        break;
+      }
+
+      for (const result of results) {
+        yield result;
+      }
+
+      lastId = results[results.length - 1][column];
+
+      if (results.length < chunkSize) {
+        break;
+      }
+    }
   }
 }

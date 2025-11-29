@@ -1,0 +1,38 @@
+# Source files (only dist should be published)
+src/
+tests/
+
+# Development files
+.git/
+.github/
+.vscode/
+.husky/
+
+# Config files
+tsconfig.json
+jest.config.js
+.eslintrc.js
+.prettierrc
+.gitignore
+
+# Documentation (except README)
+docs/
+examples/
+CONTRIBUTING.md
+INSTALLATION.md
+QUICKSTART.md
+PROJECT_STATUS.md
+
+# Development
+node_modules/
+*.log
+.env
+.env.*
+!.env.example
+
+# Test coverage
+coverage/
+
+# Build artifacts
+*.tsbuildinfo
+.DS_Store

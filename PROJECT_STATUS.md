@@ -209,18 +209,18 @@ guruorm/
 
 ## 🚧 Next Steps (In Order)
 
-### Phase 2: Complete Query Builder (Week 3-4)
-- [ ] Join clauses (inner, left, right, cross)
-- [ ] Union queries
-- [ ] Subqueries
-- [ ] Advanced where clauses
-- [ ] Having clauses
-- [ ] Group by
-- [ ] Distinct
-- [ ] Raw expressions everywhere
-- [ ] Pagination helpers
-- [ ] Chunking
-- [ ] Lazy collections
+### ✅ Phase 2: Complete Query Builder - COMPLETED (Week 3-4)
+- [x] Join clauses (inner, left, right, cross) ✅
+- [x] Union queries ✅
+- [x] Subqueries ✅
+- [x] Advanced where clauses (whereBetween, whereDate, whereTime, whereColumn) ✅
+- [x] Having clauses ✅
+- [x] Group by ✅
+- [x] Distinct ✅
+- [x] Raw expressions everywhere (selectRaw, whereRaw, orderByRaw) ✅
+- [x] Pagination helpers (paginate, simplePaginate, forPage) ✅
+- [x] Chunking ✅
+- [x] Lazy collections (lazy, lazyById generators) ✅
 
 ### Phase 3: Schema Builder (Week 5-6)
 - [ ] Complete Blueprint class
@@ -286,8 +286,8 @@ guruorm/
 | Feature | Status | Completion |
 |---------|--------|-----------|
 | MySQL Connection | ✅ Done | 100% |
-| Query Builder Basic | ✅ Done | 70% |
-| Query Builder Advanced | 🚧 In Progress | 30% |
+| Query Builder Basic | ✅ Done | 100% |
+| Query Builder Advanced | ✅ Done | 100% |
 | Schema Builder | 🚧 In Progress | 30% |
 | Migrations | ⏳ Planned | 0% |
 | Eloquent Models | ⏳ Planned | 10% |
@@ -301,7 +301,7 @@ guruorm/
 | Documentation | ✅ Done | 80% |
 | Tests | 🚧 In Progress | 20% |
 
-**Overall Project Completion: ~25%**
+**Overall Project Completion: ~35%**
 
 ---
 

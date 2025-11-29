@@ -10,13 +10,13 @@ describe('Collection', () => {
   it('should map over items', () => {
     const collection = Collection.make([1, 2, 3]);
     const mapped = collection.map((item) => item * 2);
-    expect(mapped.toArray()).toEqual([2, 4, 6]);
+    expect(Array.from(mapped)).toEqual([2, 4, 6]);
   });
 
   it('should filter items', () => {
     const collection = Collection.make([1, 2, 3, 4, 5]);
     const filtered = collection.filter((item) => item > 2);
-    expect(filtered.toArray()).toEqual([3, 4, 5]);
+    expect(Array.from(filtered)).toEqual([3, 4, 5]);
   });
 
   it('should get first item', () => {
