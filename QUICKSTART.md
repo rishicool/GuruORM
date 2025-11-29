@@ -85,7 +85,7 @@ async function queryExample() {
 queryExample();
 ```
 
-## Step 4: Define Models (Coming in Phase 5)
+## Step 4: Define Models
 
 ```typescript
 import { Model } from 'guruorm';
@@ -105,7 +105,7 @@ export class User extends Model {
   }
 }
 
-// Usage (once fully implemented)
+// Usage
 const user = await User.find(1);
 const users = await User.where('active', true).get();
 const newUser = await User.create({
@@ -114,40 +114,43 @@ const newUser = await User.create({
 });
 ```
 
-## Step 5: Create Schema (Coming in Phase 3)
+## Step 5: Create Migrations
 
-```typescript
-import { Schema } from 'guruorm';
+```bash
+# Create migration
+npx guruorm make:migration create_users_table --create=users
 
-// Create table
-await Schema.create('users', (table) => {
-  table.id();
-  table.string('name');
-  table.string('email').unique();
-  table.string('password');
-  table.boolean('active').default(true);
-  table.timestamps();
-});
+# Run migrations
+npx guruorm migrate
 ```
 
-## Available Now
+## Available Now (v1.6.0 - 91% Complete!)
 
-✅ Database connection management  
-✅ Basic Query Builder (select, where, insert, update, delete)  
-✅ Aggregates (count, sum, avg, min, max)  
-✅ Order by, limit, offset  
-✅ Transactions  
-✅ MySQL support  
+✅ **Database Connection** - MySQL, PostgreSQL, SQLite, SQL Server  
+✅ **Query Builder** - Complete (98%) with joins, unions, subqueries  
+✅ **Eloquent ORM** - Complete (95%) with all relationships  
+✅ **Schema Builder** - Complete (90%) with migrations  
+✅ **Migrations** - Complete (90%) with rollback, fresh, refresh  
+✅ **Seeding** - Complete (95%) with factories  
+✅ **CLI Commands** - 14 commands (migrate, seed, make:migration, etc.)  
+✅ **Relationships** - One-to-One, One-to-Many, Many-to-Many, Polymorphic  
+✅ **Soft Deletes** - Full support  
+✅ **Events** - Model lifecycle events  
+✅ **Scopes** - Local and global scopes  
+✅ **Chunking & Lazy Loading** - Memory-efficient processing  
+✅ **Cursor Pagination** - Constant-speed pagination  
+✅ **JavaScript & TypeScript** - Works with both!  
 
-## Coming Soon
+## Coming Soon (Next 9%)
 
-🚧 Complete Query Builder (joins, unions, subqueries)  
-🚧 Schema Builder & Migrations  
-🚧 Eloquent ORM  
-🚧 Relationships  
-🚧 Model Factories & Seeding  
-🚧 PostgreSQL, SQLite, SQL Server support  
-🚧 CLI Commands  
+🚧 Database Events (QueryExecuted, TransactionCommitted)  
+🚧 Connection Resolver & Switching  
+🚧 Read/Write Connection Splitting  
+🚧 Lateral Joins (PostgreSQL, MySQL 8+)  
+🚧 JSON Column Operators (->)  
+🚧 Vector Column Support  
+🚧 Complete Testing Utilities  
+🚧 Schema Dumping  
 
 ## Need Help?
 

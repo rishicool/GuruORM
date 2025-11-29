@@ -16,15 +16,15 @@ npm login
 # Build the project
 npm run build
 
-# Run tests (optional, since we don't have full tests yet)
-# npm test
+# Run tests
+npm test
 
 # Check what will be published
 npm pack --dry-run
 
 # Or create actual tarball to inspect
 npm pack
-tar -tzf guruorm-1.0.0.tgz
+tar -tzf guruorm-1.6.0.tgz
 ```
 
 ### 2. Update Version (Semantic Versioning)
@@ -80,8 +80,9 @@ pnpm add guruorm
 
 ### Usage
 
-```typescript
-import { Capsule } from 'guruorm';
+```javascript
+// JavaScript (CommonJS)
+const { Capsule } = require('guruorm');
 
 const capsule = new Capsule();
 
@@ -94,9 +95,22 @@ capsule.addConnection({
 });
 
 capsule.setAsGlobal();
+capsule.bootEloquent();
 
 // Use it
 const users = await Capsule.table('users').get();
+
+// Or with Eloquent
+const { Model } = require('guruorm');
+
+class User extends Model {
+  constructor() {
+    super();
+    this.table = 'users';
+  }
+}
+
+const user = await User.find(1);
 ```
 
 ## Package Name
