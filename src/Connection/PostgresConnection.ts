@@ -13,13 +13,7 @@ export class PostgresConnection extends Connection {
 
   constructor(config: ConnectionConfig) {
     super(config);
-    this.createConnection();
-  }
-
-  /**
-   * Create the PostgreSQL connection pool
-   */
-  protected async createConnection(): Promise<void> {
+    // Don't await in constructor - pool creation is synchronous
     this.pool = new Pool({
       host: this.config.host || 'localhost',
       port: this.config.port || 5432,
@@ -32,6 +26,14 @@ export class PostgresConnection extends Connection {
     });
 
     this.client = this.pool;
+  }
+
+  /**
+   * Create the PostgreSQL connection pool
+   */
+  protected async createConnection(): Promise<void> {
+    // Pool is already created in constructor
+    // This method kept for consistency with base class
   }
 
   /**

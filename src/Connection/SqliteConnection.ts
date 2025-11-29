@@ -12,13 +12,16 @@ export class SqliteConnection extends Connection {
 
   constructor(config: ConnectionConfig) {
     super(config);
-    this.createConnection();
+    // Dynamic import in constructor won't work properly
+    // Initialize synchronously in first query
   }
 
   /**
    * Create the SQLite connection
    */
   protected async createConnection(): Promise<void> {
+    if (this.db) return; // Already created
+    
     try {
       // Dynamic import to handle optional dependency
       const Database = (await import('better-sqlite3')).default;
@@ -37,6 +40,7 @@ export class SqliteConnection extends Connection {
    * Run a select statement against the database
    */
   async select(query: string, bindings: any[] = [], useReadPdo = true): Promise<any[]> {
+    await this.createConnection();
     const startTime = Date.now();
     
     try {
@@ -77,6 +81,7 @@ export class SqliteConnection extends Connection {
    * Execute an SQL statement and return the boolean result
    */
   async statement(query: string, bindings: any[] = []): Promise<boolean> {
+    await this.createConnection();
     const startTime = Date.now();
     
     try {
@@ -96,6 +101,7 @@ export class SqliteConnection extends Connection {
    * Run an SQL statement and get the number of rows affected
    */
   async affectingStatement(query: string, bindings: any[] = []): Promise<number> {
+    await this.createConnection();
     const startTime = Date.now();
     
     try {
@@ -115,6 +121,7 @@ export class SqliteConnection extends Connection {
    * Run a raw, unprepared query against the database
    */
   async unprepared(query: string): Promise<boolean> {
+    await this.createConnection();
     const startTime = Date.now();
     
     try {

@@ -11,10 +11,12 @@ import { Processor } from '../Query/Processors/Processor';
  */
 export class SqlServerConnection extends Connection {
   protected pool: any | null = null;
+  protected poolPromise: Promise<void> | null = null;
 
   constructor(config: ConnectionConfig) {
     super(config);
-    this.createConnection();
+    // Start connection but don't await in constructor
+    this.poolPromise = this.createConnection();
   }
 
   /**
@@ -49,9 +51,20 @@ export class SqlServerConnection extends Connection {
   }
 
   /**
+   * Ensure connection is ready
+   */
+  protected async ensureConnected(): Promise<void> {
+    if (this.poolPromise) {
+      await this.poolPromise;
+      this.poolPromise = null;
+    }
+  }
+
+  /**
    * Run a select statement against the database
    */
   async select(query: string, bindings: any[] = [], useReadPdo = true): Promise<any[]> {
+    await this.ensureConnected();
     const startTime = Date.now();
     
     try {
@@ -103,6 +116,7 @@ export class SqlServerConnection extends Connection {
    * Execute an SQL statement and return the boolean result
    */
   async statement(query: string, bindings: any[] = []): Promise<boolean> {
+    await this.ensureConnected();
     const startTime = Date.now();
     
     try {
@@ -130,6 +144,7 @@ export class SqlServerConnection extends Connection {
    * Run an SQL statement and get the number of rows affected
    */
   async affectingStatement(query: string, bindings: any[] = []): Promise<number> {
+    await this.ensureConnected();
     const startTime = Date.now();
     
     try {
@@ -157,6 +172,7 @@ export class SqlServerConnection extends Connection {
    * Run a raw, unprepared query against the database
    */
   async unprepared(query: string): Promise<boolean> {
+    await this.ensureConnected();
     const startTime = Date.now();
     
     try {
