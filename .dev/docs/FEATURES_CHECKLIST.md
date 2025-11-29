@@ -90,7 +90,7 @@
 - ✅ `insert()` - Insert records
 - ✅ `insertGetId()` - Insert and get ID
 - ✅ `insertOrIgnore()` - Insert or ignore duplicates
-- ❌ `insertUsing()` - Insert using subquery
+- ✅ `insertUsing()` - Insert using subquery ✨ v1.10.0
 - ✅ `upsert()` - Insert or update
 
 ### Update Operations
@@ -111,10 +111,10 @@
 - ❌ Update JSON columns
 
 ### Subquery Support
-- ✅ `selectSub()` - Subquery in SELECT ✨ NEW
-- ✅ `fromSub()` - Subquery as FROM table ✨ NEW
-- ✅ `joinSub()` - JOIN with subquery ✨ NEW
-- ✅ `leftJoinSub()` - LEFT JOIN with subquery ✨ NEW
+- ✅ `selectSub()` - Subquery in SELECT ✨ v1.10.0
+- ✅ `fromSub()` - Subquery as FROM table ✨ v1.10.0
+- ✅ `joinSub()` - JOIN with subquery ✨ v1.10.0
+- ✅ `leftJoinSub()` - LEFT JOIN with subquery ✨ v1.10.0
 - ✅ `whereSub()` - WHERE with subquery
 
 ### Locks
@@ -174,9 +174,10 @@
 - ✅ `findMany()` - Find multiple IDs
 - ✅ `first()` / `firstOrFail()` - Get first
 - ✅ `firstOr()` - First or callback
-- ✅ `firstOrCreate()` - First or create ✨ NEW
-- ✅ `firstOrNew()` - First or new instance ✨ NEW
-- ✅ `updateOrCreate()` - Update or create ✨ NEW
+- ✅ `firstOrCreate()` - First or create ✨ v1.10.0
+- ✅ `firstOrNew()` - First or new instance ✨ v1.10.0
+- ✅ `updateOrCreate()` - Update or create ✨ v1.10.0
+- ✅ `sole()` - Get sole result or throw ✨ v1.10.0
 - ✅ Query builder methods on models
 
 ### Saving Models
@@ -216,6 +217,14 @@
 - ⚠️ `morphToMany()` - Polymorphic many-to-many (basic)
 - ⚠️ `morphedByMany()` - Polymorphic many inverse (basic)
 
+### Relationship Features
+- ✅ `withDefault()` - Default model for BelongsTo/HasOne ✨ v1.11.0
+- ✅ Eager loading with constraints
+- ✅ Lazy eager loading (`load()`)
+- ❌ Constrained lazy eager loading (`load(['posts' => fn($q) => ...])`)
+- ✅ Relationship existence queries
+- ✅ Relationship counting
+
 ### Eager Loading
 - ✅ `with()` - Eager load relations
 - ✅ `load()` - Lazy eager load
@@ -247,7 +256,11 @@
 - ✅ `deleting` / `deleted` events
 - ✅ `restoring` / `restored` events
 - ✅ `replicating` event
-- ⚠️ Event observers (basic support)
+- ✅ `forceDeleting` / `forceDeleted` events ✨ v1.10.0
+- ✅ Event observers ✨ v1.10.0
+- ✅ `Observer` interface ✨ v1.10.0
+- ✅ `ObserverRegistry` class ✨ v1.10.0
+- ✅ `Model.observe()` method ✨ v1.10.0
 - ✅ `$dispatchesEvents` property
 - ✅ `WithoutModelEvents` trait (via `withoutModelEvents()` method)
 
@@ -275,8 +288,18 @@
 ### Timestamps
 - ✅ `$timestamps` property
 - ✅ `created_at` / `updated_at` auto-management
-- ✅ `touch()` - Update timestamps
+- ✅ `touch()` - Update timestamps ✨ v1.11.0
+- ✅ `touchOwners()` - Touch parent relations ✨ v1.11.0
+- ✅ `$touches` property - Define relations to touch ✨ v1.11.0
 - ✅ `withoutTimestamps()` - Disable temporarily
+
+### Model Attribute Tracking
+- ✅ `getOriginal()` - Get original attribute values
+- ✅ `wasChanged()` - Check if attributes changed on save
+- ✅ `getChanges()` - Get attributes changed on save
+- ✅ `isDirty()` - Check if model has unsaved changes
+- ✅ `isClean()` - Check if model is unchanged
+- ✅ `getDirty()` - Get unsaved attribute changes
 
 ### Pruning Models
 - ✅ `Prunable` trait (via `PrunableModel` base class)
@@ -522,21 +545,21 @@
 
 ## **SUMMARY**
 
-### Current GuruORM Coverage (v1.6.0):
-- **Query Builder**: ~98% (nearly all core features + debugging + cursor pagination)
-- **Eloquent ORM**: ~95% (comprehensive relationships, events, scopes, collections, pruning, timestamps control)
+### Current GuruORM Coverage (v1.11.0):
+- **Query Builder**: ~98% (nearly all core features + debugging + cursor pagination + subqueries)
+- **Eloquent ORM**: ~96% (comprehensive relationships, events, observers, scopes, collections, timestamps, attribute tracking)
 - **Schema Builder**: ~90% (30+ column types, modifiers, indexes, foreign keys, generated columns, hasIndex)
 - **Migrations**: ~90% (CLI commands with --force/--step, events, migrator, batch tracking, up/down/shouldRun)
 - **Seeding**: ~95% (db:seed command, DatabaseSeeder, call(), factory for()/has() relationships)
 - **Testing**: ~70% (RefreshDatabase, DatabaseTransactions, DatabaseMigrations traits)
-- **Overall**: ~91% complete
+- **Overall**: ~93% complete (up from 91%)
 
 ### ✅ Completed Features:
 1. ✅ Complete WHERE clause variations (date, JSON, full-text, any/all/none, today-based)
 2. ✅ Implement all relationships (hasMany, belongsTo, belongsToMany, hasOneThrough, hasManyThrough, polymorphic)
 3. ✅ Implement eager loading (with, load, loadMissing, withCount, has, whereHas)
 4. ✅ Add soft deletes support
-5. ✅ Add model events and observers
+5. ✅ Add model events and observers (v1.10.0: Observer interface, ObserverRegistry)
 6. ✅ Implement chunking and lazy loading
 7. ✅ Add pagination support (paginate, simplePaginate, cursorPaginate)
 8. ✅ Add transactions support
@@ -552,10 +575,15 @@
 18. ✅ Testing utilities (RefreshDatabase, DatabaseTransactions, DatabaseMigrations)
 19. ✅ Query logging with statistics
 20. ✅ Model factories with states and callbacks
+21. ✅ Subquery support (v1.10.0: selectSub, fromSub, joinSub, leftJoinSub, insertUsing)
+22. ✅ Model factory methods (v1.10.0: firstOrCreate, firstOrNew, updateOrCreate, sole)
+23. ✅ Timestamp touching (v1.11.0: touch, touchOwners, $touches property)
+24. ✅ Relationship defaults (v1.11.0: withDefault for BelongsTo/HasOne)
+25. ✅ Attribute change tracking (getOriginal, wasChanged, getChanges, isDirty)
 
 ### 🚧 Remaining Priority Items:
-1. ⚠️ Complete migration execution (currently Migrator exists, need Schema integration)
-2. ⚠️ Complete seeding system (DatabaseSeeder, call() method)
+1. ❌ Constrained lazy eager loading (`load(['posts' => fn($q) => $q->where(...)])`)
+2. ❌ Enhanced attribute casting (AsArrayObject, AsCollection, AsEncrypted variants)
 3. ❌ Database assertions for testing
 4. ❌ Model pruning (Prunable trait)
 5. ❌ Lateral joins (PostgreSQL, MySQL 8+)
@@ -564,17 +592,18 @@
 8. ❌ Connection resolver / switching
 9. ❌ Read/write connection splitting
 10. ❌ Database events (QueryExecuted, TransactionCommitted, etc.)
+11. ❌ Schema dumping (schema:dump command)
 
 ### 📊 Feature Completion by Category:
 - Query Builder: 98% ⭐⭐⭐⭐⭐
-- Eloquent Models: 95% ⭐⭐⭐⭐⭐ (up from 88%)
+- Eloquent Models: 96% ⭐⭐⭐⭐⭐ (up from 95%)
 - Eloquent Collections: 85% ⭐⭐⭐⭐⭐
-- Relationships: 95% ⭐⭐⭐⭐⭐
-- Schema Builder: 90% ⭐⭐⭐⭐⭐ (up from 85%)
-- Migrations: 90% ⭐⭐⭐⭐⭐ (up from 65%)
-- Factories: 95% ⭐⭐⭐⭐⭐ (up from 70%)
-- Seeding: 95% ⭐⭐⭐⭐⭐ (up from 40%)
+- Relationships: 96% ⭐⭐⭐⭐⭐ (up from 95%)
+- Schema Builder: 90% ⭐⭐⭐⭐⭐
+- Migrations: 90% ⭐⭐⭐⭐⭐
+- Factories: 95% ⭐⭐⭐⭐⭐
+- Seeding: 95% ⭐⭐⭐⭐⭐
 - Query Logging: 95% ⭐⭐⭐⭐⭐
-- Events & Observers: 85% ⭐⭐⭐⭐⭐ (up from 80%)
+- Events & Observers: 95% ⭐⭐⭐⭐⭐ (up from 85%)
 - Testing Support: 70% ⭐⭐⭐⭐
 
