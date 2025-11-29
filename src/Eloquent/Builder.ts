@@ -598,4 +598,30 @@ export class Builder {
       data: this.hydrate(result.data),
     };
   }
+
+  /**
+   * Apply a scope to the query
+   */
+  scopes(scopes: string[] | Record<string, any>): this {
+    const scopesArray = Array.isArray(scopes) ? scopes : Object.keys(scopes);
+    const scopeParams = Array.isArray(scopes) ? {} : scopes;
+
+    for (const scope of scopesArray) {
+      const methodName = `scope${scope.charAt(0).toUpperCase() + scope.slice(1)}`;
+      const params = scopeParams[scope] || [];
+      
+      if (typeof (this.model as any)[methodName] === 'function') {
+        (this.model as any)[methodName](this, ...params);
+      }
+    }
+
+    return this;
+  }
+
+  /**
+   * Dynamically call local scopes
+   */
+  callScope(scope: string, parameters: any[] = []): this {
+    return this.scopes({ [scope]: parameters });
+  }
 }

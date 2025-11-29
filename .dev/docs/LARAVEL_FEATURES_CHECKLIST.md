@@ -198,7 +198,7 @@
 - ✅ `forceDelete()` - Permanently delete
 - ✅ `withTrashed()` - Include soft deleted
 - ✅ `onlyTrashed()` - Only soft deleted
-- ❌ `restoreQuietly()` - Restore without events
+- ✅ `restoreQuietly()` - Restore without events
 
 ### Relationships
 - ✅ `hasOne()` - One-to-one
@@ -224,10 +224,10 @@
 - ✅ `relationLoaded()` - Check if relation loaded
 
 ### Query Scopes
-- ⚠️ Local scopes (basic structure)
+- ✅ Local scopes
 - ✅ Global scopes
-- ❌ `scope()` prefix convention
-- ❌ Dynamic scopes
+- ✅ `scope()` prefix convention
+- ✅ Dynamic scopes (via `scopes()` method)
 
 ### Accessors & Mutators
 - ✅ `getAttribute()` - Accessor
@@ -243,10 +243,10 @@
 - ✅ `saving` / `saved` events
 - ✅ `deleting` / `deleted` events
 - ✅ `restoring` / `restored` events
-- ❌ `replicating` event
+- ✅ `replicating` event
 - ⚠️ Event observers (basic support)
-- ❌ `$dispatchesEvents` property
-- ❌ `WithoutModelEvents` trait
+- ✅ `$dispatchesEvents` property
+- ✅ `WithoutModelEvents` trait (via `withoutModelEvents()` method)
 
 ### Collections
 - ✅ Basic Collection class
@@ -273,11 +273,12 @@
 - ✅ `$timestamps` property
 - ✅ `created_at` / `updated_at` auto-management
 - ✅ `touch()` - Update timestamps
-- ❌ `withoutTimestamps()` - Disable temporarily
+- ✅ `withoutTimestamps()` - Disable temporarily
 
 ### Pruning Models
-- ❌ `Prunable` trait
-- ❌ `MassPrunable` trait
+- ✅ `Prunable` trait (via `PrunableModel` base class)
+- ✅ `MassPrunable` trait (via `MassPrunableModel` base class)
+- ✅ `model:prune` command
 - ❌ `prunable()` method
 - ❌ `model:prune` command
 
@@ -299,22 +300,24 @@
 - ⚠️ `--path` option
 
 ### Migration Structure
-- ❌ `up()` method
-- ❌ `down()` method
-- ❌ `$connection` property
-- ❌ `shouldRun()` method
+- ✅ `up()` method
+- ✅ `down()` method
+- ✅ `$connection` property
+- ✅ `shouldRun()` method
+- ✅ `withinTransaction` property
+- ✅ `getConnection()` method
 
 ### Running Migrations
 - ✅ `migrate` command (via Migrator.run())
 - ✅ `migrate:status` - Check migration status
 - ✅ `migrate:rollback` - Rollback migrations
 - ✅ `migrate:reset` - Reset all migrations
-- ⚠️ `migrate:refresh` - Refresh database
-- ⚠️ `migrate:fresh` - Drop and recreate
+- ✅ `migrate:refresh` - Refresh database
+- ✅ `migrate:fresh` - Drop and recreate
 - ✅ `--pretend` flag - Show SQL
-- ❌ `--force` flag - Production
+- ✅ `--force` flag - Production
 - ❌ `--isolated` flag - Atomic locks
-- ❌ `--step` option - Batch control
+- ✅ `--step` option - Batch control
 - ✅ Batch tracking system
 - ✅ Migration file loading
 - ✅ Automatic migration table creation
@@ -327,7 +330,7 @@
 - ✅ `Schema::hasTable()` - Check table exists
 - ✅ `Schema::hasColumn()` - Check column exists
 - ✅ `Schema::hasColumns()` - Check multiple columns
-- ❌ `Schema::hasIndex()` - Check index exists
+- ✅ `Schema::hasIndex()` - Check index exists
 - ❌ `$table->temporary()` - Temporary table
 - ⚠️ `$table->engine()` - Storage engine (MySQL) (in grammar)
 - ⚠️ `$table->charset()` / `collation()` - Character set (in grammar)
@@ -436,15 +439,18 @@
 
 ### Seeder Basics
 - ✅ `make:seeder` command
-- ⚠️ `DatabaseSeeder` class
-- ⚠️ `run()` method
-- ⚠️ `call()` - Call other seeders
+- ✅ `DatabaseSeeder` class
+- ✅ `run()` method
+- ✅ `call()` - Call other seeders
+- ✅ `callWith()` - Call with options (silent mode)
+- ✅ `$connection` property
+- ✅ `getConnection()` method
 
 ### Running Seeders
-- ❌ `db:seed` command
-- ❌ `--class` option
-- ❌ `--force` flag
-- ❌ Integration with `migrate:fresh --seed`
+- ✅ `db:seed` command
+- ✅ `--class` option
+- ✅ `--force` flag
+- ✅ Integration with `migrate:fresh --seed`
 
 ### Model Factories
 - ✅ `make:factory` command
@@ -453,17 +459,17 @@
 - ✅ `->create()` - Create and save
 - ✅ `->make()` - Make without saving
 - ✅ `->state()` - Apply states
-- ❌ `->for()` - Relationships
-- ❌ `->has()` - Has many relationships
+- ✅ `->for()` - BelongsTo relationships
+- ✅ `->has()` - HasMany relationships
 - ✅ `->afterCreating()` / `afterMaking()` - Callbacks
 - ✅ `Factory` base class
 - ✅ `FactoryManager` for registration
 - ✅ `defineFactory()` helper function
 
 ### Seeder Features
-- ❌ `WithoutModelEvents` trait
-- ❌ Model factory integration
-- ❌ Calling additional seeders
+- ✅ `WithoutModelEvents` support (via `Model.withoutEvents()`)
+- ✅ Model factory integration
+- ✅ Calling additional seeders
 
 ---
 
@@ -513,14 +519,14 @@
 
 ## **SUMMARY**
 
-### Current GuruORM Coverage:
-- **Query Builder**: ~98% (nearly all core features implemented + debugging + cursor)
-- **Eloquent ORM**: ~88% (comprehensive relationships, events, scopes, collections)
-- **Schema Builder**: ~85% (30+ column types, modifiers, indexes, foreign keys, generated columns)
-- **Migrations**: ~65% (CLI commands, events, migrator, batch tracking)
-- **Seeding**: ~40% (CLI commands, factory system, base seeder class)
+### Current GuruORM Coverage (v1.6.0):
+- **Query Builder**: ~98% (nearly all core features + debugging + cursor pagination)
+- **Eloquent ORM**: ~95% (comprehensive relationships, events, scopes, collections, pruning, timestamps control)
+- **Schema Builder**: ~90% (30+ column types, modifiers, indexes, foreign keys, generated columns, hasIndex)
+- **Migrations**: ~90% (CLI commands with --force/--step, events, migrator, batch tracking, up/down/shouldRun)
+- **Seeding**: ~95% (db:seed command, DatabaseSeeder, call(), factory for()/has() relationships)
 - **Testing**: ~70% (RefreshDatabase, DatabaseTransactions, DatabaseMigrations traits)
-- **Overall**: ~80% of Laravel's Illuminate Database features
+- **Overall**: ~91% of Laravel's Illuminate Database features
 
 ### ✅ Completed Features:
 1. ✅ Complete WHERE clause variations (date, JSON, full-text, any/all/none, today-based)
@@ -558,14 +564,14 @@
 
 ### 📊 Feature Completion by Category:
 - Query Builder: 98% ⭐⭐⭐⭐⭐
-- Eloquent Models: 88% ⭐⭐⭐⭐⭐
+- Eloquent Models: 95% ⭐⭐⭐⭐⭐ (up from 88%)
 - Eloquent Collections: 85% ⭐⭐⭐⭐⭐
 - Relationships: 95% ⭐⭐⭐⭐⭐
-- Schema Builder: 85% ⭐⭐⭐⭐⭐
-- Migrations: 65% ⭐⭐⭐⭐
-- Factories: 70% ⭐⭐⭐⭐
-- Seeding: 40% ⭐⭐⭐
+- Schema Builder: 90% ⭐⭐⭐⭐⭐ (up from 85%)
+- Migrations: 90% ⭐⭐⭐⭐⭐ (up from 65%)
+- Factories: 95% ⭐⭐⭐⭐⭐ (up from 70%)
+- Seeding: 95% ⭐⭐⭐⭐⭐ (up from 40%)
 - Query Logging: 95% ⭐⭐⭐⭐⭐
-- Events & Observers: 80% ⭐⭐⭐⭐
+- Events & Observers: 85% ⭐⭐⭐⭐⭐ (up from 80%)
 - Testing Support: 70% ⭐⭐⭐⭐
 

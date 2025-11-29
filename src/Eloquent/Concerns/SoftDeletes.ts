@@ -81,7 +81,7 @@ export class SoftDeleteModel extends Model {
   /**
    * Perform the actual delete query
    */
-  protected async performDeleteOnModel(): Promise<void> {
+  protected async performDeleteOnModel(): Promise<boolean> {
     if (this.forceDeleting) {
       // Hard delete
       return await super.performDeleteOnModel();
@@ -89,6 +89,7 @@ export class SoftDeleteModel extends Model {
 
     // Soft delete - just update the deleted_at timestamp
     await this.runSoftDelete();
+    return true;
   }
 
   /**
@@ -126,7 +127,7 @@ export class SoftDeleteModel extends Model {
   /**
    * Get a new query builder that includes soft deleted models
    */
-  static withTrashed<T extends Model>(this: new () => T): any {
+  static withTrashed<T extends SoftDeleteModel>(this: new () => T): any {
     const instance = new this();
     return instance.newQueryWithoutScopes();
   }
@@ -134,7 +135,7 @@ export class SoftDeleteModel extends Model {
   /**
    * Get a new query builder that only includes soft deleted models
    */
-  static onlyTrashed<T extends Model>(this: new () => T): any {
+  static onlyTrashed<T extends SoftDeleteModel>(this: new () => T): any {
     const instance = new this();
     return instance.newQueryWithoutScopes().whereNotNull(instance.getDeletedAtColumn());
   }

@@ -28,12 +28,19 @@ export class Model {
   // Attribute casting
   protected casts: Record<string, string> = {};
   
+  // Event customization
+  protected dispatchesEvents: Record<string, string> = {};
+  
   // Model state
   protected attributes: Record<string, any> = {};
   protected original: Record<string, any> = {};
   protected relations: Record<string, any> = {};
   protected exists = false;
   protected wasRecentlyCreated = false;
+  
+  // Temporary flags
+  protected static withoutTimestampsOn = false;
+  protected static withoutEventsOn = false;
 
   /**
    * Check if the model exists in the database
@@ -330,6 +337,14 @@ export class Model {
   }
 
   /**
+   * Sync a single original attribute with the current
+   */
+  syncOriginalAttribute(attribute: string): this {
+    this.original[attribute] = this.attributes[attribute];
+    return this;
+  }
+
+  /**
    * Get the attributes that have been changed since last sync
    */
   getDirty(): Record<string, any> {
@@ -445,9 +460,34 @@ export class Model {
   }
 
   /**
+   * Execute a callback without timestamps being updated
+   */
+  static async withoutTimestamps<T>(callback: () => T | Promise<T>): Promise<T> {
+    const previous = this.withoutTimestampsOn;
+    this.withoutTimestampsOn = true;
+
+    try {
+      return await callback();
+    } finally {
+      this.withoutTimestampsOn = previous;
+    }
+  }
+
+  /**
+   * Check if timestamps are currently disabled
+   */
+  protected static isIgnoringTimestamps(): boolean {
+    return this.withoutTimestampsOn;
+  }
+
+  /**
    * Update the model's timestamps
    */
   protected updateTimestamps(): void {
+    if ((this.constructor as typeof Model).isIgnoringTimestamps()) {
+      return;
+    }
+
     const time = new Date();
 
     const updatedAtColumn = (this.constructor as typeof Model).UPDATED_AT;
@@ -547,6 +587,14 @@ export class Model {
       return false;
     }
 
+    return await this.performDeleteOnModel();
+  }
+
+  /**
+   * Perform the actual delete query on this model instance
+   * Can be overridden by traits like SoftDeletes
+   */
+  protected async performDeleteOnModel(): Promise<boolean> {
     const query = this.newQuery().where(this.primaryKey, this.getKey());
     await query.delete();
 
@@ -610,6 +658,13 @@ export class Model {
     builder.setModel(this);
 
     return builder;
+  }
+
+  /**
+   * Get a new query builder that doesn't have any global scopes
+   */
+  newQueryWithoutScopes(): EloquentBuilder {
+    return this.newQuery();
   }
 
   /**
@@ -872,7 +927,12 @@ export class Model {
       delete attributes[key];
     }
 
-    return this.newInstance(attributes, false);
+    const instance = this.newInstance(attributes, false);
+    
+    // Fire replicating event
+    this.fireModelEvent('replicating');
+    
+    return instance;
   }
 
   /**
@@ -1128,8 +1188,41 @@ export class Model {
    * Fire the given event for the model
    */
   protected async fireModelEvent(event: string, halt = true): Promise<boolean> {
+    // Check if events are disabled
+    if ((this.constructor as typeof Model).withoutEventsOn) {
+      return true;
+    }
+
+    // Check for custom event mapping
+    const customEvent = this.dispatchesEvents[event];
+    if (customEvent) {
+      event = customEvent;
+    }
+
     const modelClass = this.constructor.name;
     return Events.fire(modelClass, event, this);
+  }
+
+  /**
+   * Execute a callback without firing model events
+   */
+  static async withoutEvents<T>(callback: () => T | Promise<T>): Promise<T> {
+    const previous = this.withoutEventsOn;
+    this.withoutEventsOn = true;
+
+    try {
+      return await callback();
+    } finally {
+      this.withoutEventsOn = previous;
+    }
+  }
+
+  /**
+   * Execute the callback without firing model events
+   * Alias for withoutEvents
+   */
+  static async withoutModelEvents<T>(callback: () => T | Promise<T>): Promise<T> {
+    return this.withoutEvents(callback);
   }
 
   /**

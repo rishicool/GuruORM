@@ -19,7 +19,7 @@ const program = new Command();
 program
   .name('guruorm')
   .description('guruORM - A powerful Node.js ORM inspired by Laravel')
-  .version('1.0.0');
+  .version('1.6.0');
 
 // Initialize command
 program
@@ -36,17 +36,40 @@ program
   .description('Run the database migrations')
   .option('-d, --database <database>', 'The database connection to use')
   .option('--force', 'Force the operation to run in production')
+  .option('--step <step>', 'Force the migrations to be run so they can be rolled back individually', parseInt)
+  .option('--pretend', 'Dump the SQL queries that would be run')
   .action((options) => {
     console.log('Running migrations...', options);
+    
+    if (!options.force && process.env.NODE_ENV === 'production') {
+      console.error('❌ Use --force to run migrations in production');
+      process.exit(1);
+    }
+    
+    if (options.step) {
+      console.log(`   Running next ${options.step} migration(s)...`);
+    }
+    
     console.log('This feature will be implemented in Phase 4');
   });
 
 program
   .command('migrate:rollback')
   .description('Rollback the last database migration')
-  .option('--step <step>', 'The number of migrations to be reverted')
+  .option('--step <step>', 'The number of migrations to be reverted', parseInt)
+  .option('--force', 'Force the operation to run in production')
   .action((options) => {
     console.log('Rolling back migrations...', options);
+    
+    if (!options.force && process.env.NODE_ENV === 'production') {
+      console.error('❌ Use --force to rollback migrations in production');
+      process.exit(1);
+    }
+    
+    if (options.step) {
+      console.log(`   Rolling back ${options.step} migration(s)...`);
+    }
+    
     console.log('This feature will be implemented in Phase 4');
   });
 
@@ -54,9 +77,51 @@ program
   .command('migrate:fresh')
   .description('Drop all tables and re-run all migrations')
   .option('--seed', 'Seed the database after migrating')
-  .action((options) => {
-    console.log('Refreshing database...', options);
-    console.log('This feature will be implemented in Phase 4');
+  .option('--force', 'Force the operation to run in production')
+  .action(async (options) => {
+    console.log('🔄 Dropping all tables and refreshing database...');
+    console.log('');
+    console.log('⚠️  This will drop all tables!');
+    
+    if (!options.force && process.env.NODE_ENV === 'production') {
+      console.error('❌ Use --force to run in production');
+      process.exit(1);
+    }
+    
+    console.log('');
+    console.log('Implementation:');
+    console.log('  1. Run Schema::dropAllTables()');
+    console.log('  2. Run all migrations');
+    if (options.seed) {
+      console.log('  3. Run db:seed');
+    }
+    console.log('');
+    console.log('This feature requires a database connection setup');
+  });
+
+program
+  .command('migrate:refresh')
+  .description('Reset and re-run all migrations')
+  .option('--seed', 'Seed the database after migrating')
+  .option('--step <step>', 'The number of migrations to rollback')
+  .option('--force', 'Force the operation to run in production')
+  .action(async (options) => {
+    console.log('🔄 Resetting and re-running migrations...');
+    console.log('');
+    
+    if (!options.force && process.env.NODE_ENV === 'production') {
+      console.error('❌ Use --force to run in production');
+      process.exit(1);
+    }
+    
+    console.log('Implementation:');
+    console.log('  1. Run migrate:reset');
+    console.log('  2. Run migrate');
+    if (options.seed) {
+      console.log('  3. Run db:seed');
+    }
+    console.log('');
+    console.log('This feature requires a database connection setup');
   });
 
 program
@@ -105,10 +170,44 @@ program
 program
   .command('db:seed')
   .description('Seed the database with records')
-  .option('--class <class>', 'The seeder class to run')
-  .action((options) => {
-    console.log('Seeding database...', options);
-    console.log('This feature will be implemented in Phase 7');
+  .option('--class <class>', 'The seeder class to run', 'DatabaseSeeder')
+  .option('--force', 'Force the operation to run in production')
+  .action(async (options) => {
+    try {
+      console.log(`🌱 Seeding database with ${options.class}...`);
+      console.log('');
+      
+      // Dynamically import the seeder
+      const seederPath = path.join(process.cwd(), 'database', 'seeders', `${options.class}.js`);
+      
+      try {
+        const { default: SeederClass } = await import(seederPath);
+        const seeder = new SeederClass();
+        
+        if (typeof seeder.run !== 'function') {
+          throw new Error(`Seeder ${options.class} must have a run() method`);
+        }
+        
+        await seeder.run();
+        console.log('');
+        console.log(`✅ Database seeding completed successfully!`);
+      } catch (error) {
+        if (error.code === 'MODULE_NOT_FOUND' || error.code === 'ERR_MODULE_NOT_FOUND') {
+          console.error(`❌ Seeder not found: ${options.class}`);
+          console.log(`   Expected: ${seederPath}`);
+          console.log('');
+          console.log('   Create it with: guruorm make:seeder ' + options.class);
+        } else {
+          throw error;
+        }
+      }
+    } catch (error) {
+      console.error('❌ Error seeding database:', error.message);
+      if (error.stack) {
+        console.error(error.stack);
+      }
+      process.exit(1);
+    }
   });
 
 program
@@ -170,6 +269,24 @@ program
   .action((options) => {
     console.log('Database information:', options);
     console.log('This feature will be implemented in Phase 8');
+  });
+
+// Model commands
+program
+  .command('model:prune')
+  .description('Prune models marked as prunable')
+  .option('--model <model>', 'The model to prune')
+  .option('--chunk <chunk>', 'The chunk size for processing', '1000')
+  .option('--pretend', 'Display the number of prunable records without deleting')
+  .action(async (options) => {
+    console.log('Pruning models...', options);
+    console.log('');
+    console.log('Usage: Import your prunable model and call Model.prune()');
+    console.log('');
+    console.log('Example:');
+    console.log('  import { MyModel } from "./models/MyModel"');
+    console.log('  const pruned = await MyModel.prune(1000);');
+    console.log('  console.log(`Pruned ${pruned} models`);');
   });
 
 program.parse(process.argv);

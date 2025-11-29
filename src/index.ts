@@ -24,6 +24,7 @@ export { Scope, SoftDeletingScope, HasGlobalScopes } from './Eloquent/Scope';
 // Model Concerns
 export { SoftDeleteModel } from './Eloquent/Concerns/SoftDeletes';
 export { HasUuids, UuidModel, HasUlids, UlidModel } from './Eloquent/Concerns/HasUuids';
+export { PrunableModel, MassPrunableModel } from './Eloquent/Concerns/Prunable';
 
 // Custom Casts
 export { CastsAttributes, ArrayCast, JsonCast, EncryptedCast, AsCollectionCast, AsStringableCast } from './Eloquent/Casts/CastsAttributes';

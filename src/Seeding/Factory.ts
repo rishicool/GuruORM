@@ -9,6 +9,16 @@ export class Factory<T extends Model> {
   protected states: Record<string, any>[] = [];
   protected afterCreatingCallbacks: Array<(model: T) => void | Promise<void>> = [];
   protected afterMakingCallbacks: Array<(model: T) => void | Promise<void>> = [];
+  protected relationships: Array<{
+    relation: string;
+    factory: Factory<any>;
+    attributes?: Record<string, any>;
+  }> = [];
+  protected parentRelationships: Array<{
+    relation: string;
+    factory: Factory<any> | Model;
+    foreignKey?: string;
+  }> = [];
 
   constructor(modelClass: new () => T) {
     this.model = modelClass;
@@ -31,6 +41,30 @@ export class Factory<T extends Model> {
   }
 
   /**
+   * Define a belongs-to relationship
+   */
+  for(parentFactory: Factory<any> | Model, relation?: string, foreignKey?: string): this {
+    this.parentRelationships.push({
+      relation: relation || 'parent',
+      factory: parentFactory,
+      foreignKey,
+    });
+    return this;
+  }
+
+  /**
+   * Define a has-many relationship
+   */
+  has(childFactory: Factory<any>, relation?: string, attributes?: Record<string, any>): this {
+    this.relationships.push({
+      relation: relation || 'children',
+      factory: childFactory,
+      attributes,
+    });
+    return this;
+  }
+
+  /**
    * Create and save models
    */
   async create(attributes: Record<string, any> = {}): Promise<T | T[]> {
@@ -38,14 +72,60 @@ export class Factory<T extends Model> {
     
     if (Array.isArray(models)) {
       for (const model of models) {
+        // Handle parent relationships
+        await this.createParentRelationships(model);
+        
         await model.save();
         await this.runAfterCreating(model);
+        
+        // Handle child relationships
+        await this.createChildRelationships(model);
       }
       return models;
     } else {
+      // Handle parent relationships
+      await this.createParentRelationships(models);
+      
       await models.save();
       await this.runAfterCreating(models);
+      
+      // Handle child relationships
+      await this.createChildRelationships(models);
+      
       return models;
+    }
+  }
+
+  /**
+   * Create parent relationships (belongs-to)
+   */
+  protected async createParentRelationships(model: T): Promise<void> {
+    for (const { factory, foreignKey } of this.parentRelationships) {
+      let parent: Model;
+      
+      if (factory instanceof Model) {
+        parent = factory;
+      } else {
+        const created = await factory.create();
+        parent = Array.isArray(created) ? created[0] : created;
+      }
+      
+      // Set foreign key on child model
+      const fk = foreignKey || `${parent.constructor.name.toLowerCase()}_id`;
+      model.setAttribute(fk, parent.getKey());
+    }
+  }
+
+  /**
+   * Create child relationships (has-many)
+   */
+  protected async createChildRelationships(model: T): Promise<void> {
+    for (const { factory, attributes } of this.relationships) {
+      // Create children and associate with parent
+      const children = await factory.create({
+        ...attributes,
+        [`${model.constructor.name.toLowerCase()}_id`]: model.getKey(),
+      });
     }
   }
 

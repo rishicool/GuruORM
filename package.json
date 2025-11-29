@@ -1,6 +1,6 @@
 {
   "name": "guruorm",
-  "version": "1.5.0",
+  "version": "1.6.0",
   "description": "A powerful, elegant Node.js ORM inspired by Laravel's Illuminate Database",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -13,7 +13,7 @@
     "CHANGELOG.md"
   ],
   "bin": {
-    "guruorm": "bin/guruorm.js"
+    "guruorm": "bin/guruorm.mjs"
   },
   "scripts": {
     "build": "tsc",
@@ -42,7 +42,12 @@
     "laravel",
     "illuminate",
     "active-record",
-    "typescript"
+    "typescript",
+    "javascript",
+    "es6",
+    "node-orm",
+    "database-migrations",
+    "eloquent-orm"
   ],
   "author": "GuruORM Contributors",
   "license": "MIT",

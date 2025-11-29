@@ -85,6 +85,21 @@ export class Builder {
   }
 
   /**
+   * Determine if the given table has a given index
+   */
+  async hasIndex(table: string, indexName: string): Promise<boolean> {
+    // This is database-specific, basic implementation
+    try {
+      const sql = `SHOW INDEX FROM \`${table}\` WHERE Key_name = ?`;
+      const results = await this.connection.select(sql, [indexName]);
+      return results.length > 0;
+    } catch (error) {
+      // Fallback for non-MySQL databases
+      return false;
+    }
+  }
+
+  /**
    * Get the data type for a given column
    */
   async getColumnType(table: string, column: string): Promise<string> {
