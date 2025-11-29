@@ -465,7 +465,15 @@ export class Grammar {
       return "";
     }
 
-    const sql = havings.map((having) => this.compileHaving(having)).join(" ");
+    const sql = havings.map((having, index) => {
+      // Remove boolean from first having clause
+      const compiled = this.compileHaving(having);
+      if (index === 0) {
+        return compiled.replace(/^(and |or )/i, "");
+      }
+      return compiled;
+    }).join(" ");
+    
     return `having ${sql}`;
   }
 
