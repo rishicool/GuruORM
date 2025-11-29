@@ -1,7 +1,7 @@
 import { Model } from './Model';
 
 /**
- * Soft Deletes functionality - inspired by Laravel's SoftDeletes trait
+ * Soft Deletes functionality - inspired by Laravel and Illuminate
  * 
  * To use soft deletes in your model:
  * 1. Extend your model from Model

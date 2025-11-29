@@ -1,7 +1,7 @@
 {
   "name": "guruorm",
   "version": "1.6.0",
-  "description": "A powerful, elegant Node.js ORM inspired by Laravel's Illuminate Database",
+  "description": "A powerful, elegant Node.js ORM inspired by Laravel and Illuminate",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "files": [
@@ -39,8 +39,6 @@
     "eloquent",
     "migrations",
     "seeder",
-    "laravel",
-    "illuminate",
     "active-record",
     "typescript",
     "javascript",

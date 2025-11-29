@@ -4,7 +4,7 @@
 
 GuruORM includes Eloquent, an object-relational mapper (ORM) that makes it enjoyable to interact with your database. When using Eloquent, each database table has a corresponding "Model" that is used to interact with that table. In addition to retrieving records from the database table, Eloquent models allow you to insert, update, and delete records from the table as well.
 
-> **Note:** Eloquent ORM is inspired by Laravel's elegant database layer and brings the same developer experience to Node.js applications.
+> **Note:** Eloquent ORM brings elegant database layer to Node.js applications.
 
 Before getting started, be sure to configure a database connection. For more information on configuring your database, check out the [Getting Started documentation](./getting-started.md).
 

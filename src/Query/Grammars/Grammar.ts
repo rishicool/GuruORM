@@ -2,7 +2,7 @@ import { Builder } from '../Builder';
 import { Expression } from '../Expression';
 
 /**
- * Base Grammar class - inspired by Laravel's Query Grammar
+ * Base Grammar class - inspired by Laravel and Illuminate
  * Compiles query builder into SQL statements
  */
 export class Grammar {

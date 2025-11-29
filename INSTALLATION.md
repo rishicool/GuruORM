@@ -324,4 +324,4 @@ Create `.vscode/settings.json`:
 
 ---
 
-**You're all set!** Start using guruORM and enjoy the Laravel-like experience in Node.js! 🎉
+**You're all set!** Start using guruORM! 🎉

@@ -3,7 +3,7 @@ import { Model } from './Model';
 import { Collection } from './Collection';
 
 /**
- * Eloquent Builder - inspired by Laravel's Eloquent Builder
+ * Eloquent Builder - inspired by Laravel and Illuminate
  * Extends the query builder with model-aware functionality
  */
 export class Builder {

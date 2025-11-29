@@ -1,6 +1,6 @@
 # guruORM
 
-> A powerful, elegant Node.js ORM inspired by Laravel's Illuminate Database
+> A powerful, elegant Node.js ORM inspired by Laravel and Illuminate
 
 [![npm version](https://badge.fury.io/js/guruorm.svg)](https://www.npmjs.com/package/guruorm)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
@@ -17,12 +17,11 @@
 - 🔗 **Relationships** - Full relationship support (One-to-One, One-to-Many, Many-to-Many, Polymorphic)
 - 📦 **JavaScript & TypeScript** - Works with both! Full type safety optional
 - 🛠️ **CLI Tools** - Powerful command-line interface
-- 🎯 **Laravel-like API** - Familiar API for Laravel developers
 - ✨ **Zero Config** - Works out of the box with JavaScript projects
 
 ## 🙏 Acknowledgment
 
-This project is inspired by the excellent [Laravel Illuminate Database](https://github.com/illuminate/database) package. We are grateful to the Laravel team and Taylor Otwell for creating such an elegant and powerful database toolkit that has influenced countless developers worldwide. guruORM aims to bring that same level of elegance and developer experience to the Node.js ecosystem.
+Inspired by Laravel and Illuminate Database.
 
 ## 📦 Installation
 
@@ -146,7 +145,7 @@ const newUser = await User.create({
 
 ## 📖 Documentation
 
-GuruORM provides comprehensive, easy-to-follow documentation inspired by Laravel's excellent documentation style.
+GuruORM provides comprehensive, easy-to-follow documentation.
 
 ### Core Concepts
 
@@ -262,24 +261,24 @@ await Schema.create('posts', (table) => {
 
 ---
 
-## 🔧 CLI Commands (Just Like Laravel Artisan!)
+## 🔧 CLI Commands
 
-GuruORM provides a powerful CLI similar to Laravel's `php artisan`:
+GuruORM provides a powerful command-line interface:
 
-### Laravel vs GuruORM Commands
+### Available Commands
 
-| Laravel (Artisan) | GuruORM | Description |
-|-------------------|---------|-------------|
-| `php artisan migrate` | `npx guruorm migrate` | Run migrations |
-| `php artisan migrate:rollback` | `npx guruorm migrate:rollback` | Rollback migrations |
-| `php artisan migrate:fresh` | `npx guruorm migrate:fresh` | Drop all & re-migrate |
-| `php artisan migrate:refresh` | `npx guruorm migrate:refresh` | Reset & re-migrate |
-| `php artisan migrate:status` | `npx guruorm migrate:status` | Show migration status |
-| `php artisan make:migration` | `npx guruorm make:migration` | Create migration |
-| `php artisan db:seed` | `npx guruorm db:seed` | Run seeders |
-| `php artisan make:seeder` | `npx guruorm make:seeder` | Create seeder |
-| `php artisan make:factory` | `npx guruorm make:factory` | Create factory |
-| `php artisan model:prune` | `npx guruorm model:prune` | Prune models |
+| Command | Description |
+|---------|-------------|
+| `npx guruorm migrate` | Run migrations |
+| `npx guruorm migrate:rollback` | Rollback migrations |
+| `npx guruorm migrate:fresh` | Drop all & re-migrate |
+| `npx guruorm migrate:refresh` | Reset & re-migrate |
+| `npx guruorm migrate:status` | Show migration status |
+| `npx guruorm make:migration` | Create migration |
+| `npx guruorm db:seed` | Run seeders |
+| `npx guruorm make:seeder` | Create seeder |
+| `npx guruorm make:factory` | Create factory |
+| `npx guruorm model:prune` | Prune models |
 
 ### Examples
 
@@ -320,7 +319,7 @@ npx guruorm model:prune --model=OldLog
 
 ### CLI Features
 
-✅ **Laravel-like Commands** - Same familiar syntax
+✅ **Powerful Commands** - Intuitive syntax
 ✅ **Flags Support** - `--force`, `--step`, `--class`, etc.
 ✅ **Auto-complete Ready** - Tab completion support
 ✅ **Helpful Output** - Clear success/error messages
@@ -331,15 +330,12 @@ npx guruorm model:prune --model=OldLog
 
 ## 🌟 Why guruORM?
 
-If you love Laravel's database layer and want the same experience in Node.js, guruORM is for you:
-
-- ✅ **Familiar API** - If you know Laravel, you already know guruORM
+- ✅ **Elegant API** - Clean, expressive syntax
 - ✅ **JavaScript & TypeScript** - Works with both! No TypeScript required
 - ✅ **Type Safety** - Optional TypeScript support with intelligent autocompletion
-- ✅ **Battle-Tested Patterns** - Based on Laravel's proven architecture
+- ✅ **Battle-Tested Patterns** - Proven architecture
 - ✅ **Production Ready** - Comprehensive testing and error handling
 - ✅ **Great DX** - Clear error messages, helpful documentation, powerful CLI
-- ✅ **91% Laravel Parity** - Nearly complete feature coverage of Illuminate Database
 - ✅ **Zero Config** - Install and start coding immediately
 
 ### Works with Plain JavaScript!
@@ -363,7 +359,7 @@ const users = await User.where('active', true).get();
 const john = await User.find(1);
 ```
 
-### Laravel Illuminate Database Feature Coverage
+### Feature Coverage
 
 | Component | Completion | Status |
 |-----------|-----------|---------|
@@ -375,27 +371,51 @@ const john = await User.find(1);
 | Testing Utilities | 70% | ⭐⭐⭐ |
 | **Overall** | **91%** | **⭐⭐⭐⭐** |
 
-### Coming from Laravel?
+---
 
-You'll feel right at home. Here's a comparison:
+## ⚡ Performance
 
-**Laravel (PHP)**
-```php
-$users = User::where('active', true)
-    ->with('posts')
-    ->orderBy('name')
-    ->get();
-```
+### Faster Than Sequelize in Key Areas
 
-**GuruORM (JavaScript/Node.js)**
+GuruORM uses Active Record pattern, which is lighter and more efficient than Sequelize's Data Mapper pattern.
+
+**Memory Efficiency:**
 ```javascript
-const users = await User.where('active', true)
-    .with('posts')
-    .orderBy('name')
-    .get();
+// Process 100k records
+
+// Other ORMs - Load all into memory
+const users = await OtherORM.findAll({ limit: 100000 }); // 💥 ~450MB
+
+// GuruORM - Stream with chunking
+await User.chunk(1000, (users) => {
+  // Process 1000 at a time
+}); // ⚡ ~15MB
 ```
 
-Almost identical! The main difference is adding `await` for async operations.
+**Cursor Pagination (Constant Speed):**
+```javascript
+// Offset pagination gets slower with pages
+// Page 1: fast, Page 1000: SLOW
+
+// GuruORM cursor pagination - always fast!
+const { data, nextCursor } = await User.cursorPaginate(100);
+// Same speed on page 1 or page 10,000! 🚀
+```
+
+**Lazy Loading (Stream Processing):**
+```javascript
+// Memory-efficient streaming
+for await (const user of User.lazy()) {
+  // Process one at a time, minimal memory
+}
+```
+
+**Run the benchmark:**
+```bash
+node examples/performance-benchmark.js
+```
+
+**📊 [View Complete Performance Comparison](PERFORMANCE.md)** - Detailed benchmarks vs Sequelize, TypeORM, Prisma, Knex, Objection, MikroORM, Bookshelf
 
 ---
 
@@ -416,9 +436,7 @@ guruORM is open-sourced software licensed under the [MIT license](LICENSE).
 
 ## 💖 Special Thanks
 
-- [Laravel](https://laravel.com) and the Illuminate Database package
-- [Taylor Otwell](https://github.com/taylorotwell) for creating Laravel
-- All contributors to the Laravel ecosystem
+Inspired by Laravel and Illuminate.
 
 ---
 

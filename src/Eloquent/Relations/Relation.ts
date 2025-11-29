@@ -2,7 +2,7 @@ import { Model } from '../Model';
 import { Builder } from '../Builder';
 
 /**
- * Base Relation class - inspired by Laravel's Relation
+ * Base Relation class - inspired by Laravel and Illuminate
  */
 export abstract class Relation {
   protected query: Builder;

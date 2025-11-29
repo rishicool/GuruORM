@@ -1,7 +1,7 @@
 import { Builder } from '../Builder';
 
 /**
- * Base Processor class - inspired by Laravel's Query Processor
+ * Base Processor class - inspired by Laravel and Illuminate
  * Processes the results of database queries
  */
 export class Processor {

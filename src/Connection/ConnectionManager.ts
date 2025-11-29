@@ -6,7 +6,7 @@ import { SqlServerConnection } from './SqlServerConnection';
 import { ConnectionResolver } from './ConnectionResolver';
 
 /**
- * Database Connection Manager - inspired by Laravel's DatabaseManager
+ * Database Connection Manager - inspired by Laravel and Illuminate
  * Manages multiple database connections
  */
 export class ConnectionManager {

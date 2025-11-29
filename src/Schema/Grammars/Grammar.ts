@@ -1,5 +1,5 @@
 /**
- * Base Schema Grammar class - inspired by Laravel's Schema Grammar
+ * Base Schema Grammar class - inspired by Laravel and Illuminate
  * Compiles schema builder commands into SQL statements
  */
 export class Grammar {

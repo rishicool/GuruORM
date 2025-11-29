@@ -6,7 +6,7 @@ GuruORM's database query builder provides a convenient, fluent interface to crea
 
 The query builder uses parameter binding to protect your application against SQL injection attacks. There is no need to clean or sanitize strings passed to the query builder as query bindings.
 
-> **Note:** The query builder is inspired by Laravel's elegant database layer, bringing the same developer experience to Node.js.
+> **Note:** The query builder brings elegant database layer to Node.js.
 
 ## Running Database Queries
 

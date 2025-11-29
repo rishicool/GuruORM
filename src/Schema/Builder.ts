@@ -2,7 +2,7 @@ import { Connection } from '../Connection/Connection';
 import { Grammar } from './Grammars/Grammar';
 
 /**
- * Schema Builder - inspired by Laravel's Schema Builder
+ * Schema Builder - inspired by Laravel and Illuminate
  * Provides methods for creating and modifying database schema
  */
 export class Builder {

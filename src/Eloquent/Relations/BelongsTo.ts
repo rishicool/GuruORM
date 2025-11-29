@@ -3,7 +3,7 @@ import { Model } from '../Model';
 import { Builder } from '../Builder';
 
 /**
- * BelongsTo Relation - inspired by Laravel's BelongsTo
+ * BelongsTo Relation - inspired by Laravel and Illuminate
  */
 export class BelongsTo extends Relation {
   protected foreignKey: string;

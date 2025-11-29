@@ -2,7 +2,7 @@ import { Model } from '../Model';
 import { Builder } from '../Builder';
 
 /**
- * Prunable Model - inspired by Laravel's Prunable trait
+ * Prunable Model - inspired by Laravel and Illuminate
  * Allows models to be pruned (deleted) based on certain conditions
  */
 export abstract class PrunableModel extends Model {
@@ -55,7 +55,7 @@ export abstract class PrunableModel extends Model {
 }
 
 /**
- * Mass Prunable Model - inspired by Laravel's MassPrunable trait
+ * Mass Prunable Model - inspired by Laravel and Illuminate
  * Allows models to be mass deleted without firing individual model events
  */
 export abstract class MassPrunableModel extends Model {

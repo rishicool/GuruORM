@@ -4,7 +4,7 @@ import { Builder as EloquentBuilder } from './Builder';
 import { Events } from './Events';
 
 /**
- * Model base class - inspired by Laravel's Eloquent Model
+ * Model base class - inspired by Laravel and Illuminate
  */
 export class Model {
   // Table configuration

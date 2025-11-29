@@ -4,7 +4,7 @@ import { Builder as QueryBuilder } from '../Query/Builder';
 import { Builder as SchemaBuilder } from '../Schema/Builder';
 
 /**
- * Base connection class - inspired by Laravel's Connection class
+ * Base connection class - inspired by Laravel and Illuminate
  * Provides core database connection functionality
  */
 export abstract class Connection implements ConnectionInterface {

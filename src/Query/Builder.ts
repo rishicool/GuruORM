@@ -5,7 +5,7 @@ import { Expression } from './Expression';
 import { JoinClause } from './JoinClause';
 
 /**
- * Query Builder - inspired by Laravel's Query Builder
+ * Query Builder - inspired by Laravel and Illuminate
  * Provides a fluent interface for building SQL queries
  */
 export class Builder {

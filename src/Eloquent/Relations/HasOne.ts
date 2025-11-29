@@ -3,7 +3,7 @@ import { Model } from '../Model';
 import { Builder } from '../Builder';
 
 /**
- * HasOne Relation - inspired by Laravel's HasOne
+ * HasOne Relation - inspired by Laravel and Illuminate
  */
 export class HasOne extends Relation {
   protected foreignKey: string;

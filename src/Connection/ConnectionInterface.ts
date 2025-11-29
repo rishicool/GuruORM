@@ -26,7 +26,7 @@ export interface ConnectionConfig {
 }
 
 /**
- * Database connection interface - inspired by Laravel's ConnectionInterface
+ * Database connection interface - inspired by Laravel and Illuminate
  */
 export interface ConnectionInterface {
   /**

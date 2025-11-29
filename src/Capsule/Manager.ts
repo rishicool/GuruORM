@@ -3,7 +3,7 @@ import { ConnectionConfig } from '../Connection/ConnectionInterface';
 import { ConnectionInterface } from '../Connection/ConnectionInterface';
 
 /**
- * Capsule Manager - inspired by Laravel's Capsule Manager
+ * Capsule Manager - inspired by Laravel and Illuminate
  * Provides a simple way to use the database outside of a full framework
  */
 export class Manager {

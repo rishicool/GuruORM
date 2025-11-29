@@ -6,7 +6,7 @@ import { Grammar as SchemaGrammar } from '../Schema/Grammars/MySqlGrammar';
 import { Processor } from '../Query/Processors/Processor';
 
 /**
- * MySQL Connection class - inspired by Laravel's MySqlConnection
+ * MySQL Connection class - inspired by Laravel and Illuminate
  */
 export class MySqlConnection extends Connection {
   protected pool: mysql.Pool | null = null;

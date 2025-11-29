@@ -1,7 +1,7 @@
 import { ConnectionInterface } from './ConnectionInterface';
 
 /**
- * Connection Resolver Interface - inspired by Laravel's ConnectionResolverInterface
+ * Connection Resolver Interface - inspired by Laravel and Illuminate
  */
 export interface ConnectionResolverInterface {
   /**

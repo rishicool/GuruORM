@@ -1,6 +1,6 @@
 // @ts-nocheck - Collection extends Array with intentional signature overrides
 /**
- * Collection class - inspired by Laravel's Support Collection
+ * Collection class - inspired by Laravel and Illuminate
  * Provides a fluent, convenient wrapper for working with arrays
  */
 export class Collection<T = any> extends Array<T> {

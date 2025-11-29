@@ -4,7 +4,7 @@ import { Builder } from '../Builder';
 import { Collection } from '../Collection';
 
 /**
- * HasMany Relation - inspired by Laravel's HasMany
+ * HasMany Relation - inspired by Laravel and Illuminate
  */
 export class HasMany extends Relation {
   protected foreignKey: string;

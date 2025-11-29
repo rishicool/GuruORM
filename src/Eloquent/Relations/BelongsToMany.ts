@@ -4,7 +4,7 @@ import { Builder } from '../Builder';
 import { Collection } from '../Collection';
 
 /**
- * BelongsToMany Relation - inspired by Laravel's BelongsToMany
+ * BelongsToMany Relation - inspired by Laravel and Illuminate
  */
 export class BelongsToMany extends Relation {
   protected table: string;

@@ -18,7 +18,7 @@ const program = new Command();
 
 program
   .name('guruorm')
-  .description('guruORM - A powerful Node.js ORM inspired by Laravel')
+  .description('guruORM - A powerful Node.js ORM')
   .version('1.6.0');
 
 // Initialize command
