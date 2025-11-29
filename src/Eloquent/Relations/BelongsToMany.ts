@@ -109,7 +109,7 @@ export class BelongsToMany extends Relation {
     for (const model of models) {
       const key = model.getAttribute(this.parentKey);
       if (dictionary[key]) {
-        model['relations'][relation] = new Collection(dictionary[key]);
+        model['relations'][relation] = new Collection(...dictionary[key]);
       }
     }
 

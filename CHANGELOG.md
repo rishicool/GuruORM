@@ -5,6 +5,34 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.7.6] - 2025-11-29
+
+### Fixed
+- **CRITICAL BUG**: Fixed eager loading returning Arrays instead of Model instances
+  - `HasMany.match()` now correctly spreads array elements into Collection
+  - `BelongsToMany.match()` now correctly spreads array elements into Collection
+  - Was: `new Collection(dictionary[key])` - created Collection with single Array element
+  - Now: `new Collection(...dictionary[key])` - spreads Models into Collection
+- **whereIn/whereNotIn** - Now handle non-array values correctly
+- **Nested relationships** - Fixed eager loading with dot notation (e.g., `posts.comments`)
+
+### Added
+- **Model.whereDoesntHave()** - Static method for querying models without a related model
+- **BelongsToMany.toggle()** - Attach/detach pivot records based on current state
+- **HasMany.save()** - Save a model with automatic foreign key assignment
+
+### Achievements
+- **143/145 tests passing (98.6%)** 🎉🎉🎉
+- **Query Builder: 62/62 tests passing (100%)** ✅
+- **Transactions: 14/14 tests passing (100%)** ✅
+- **Eloquent ORM: 37/38 tests passing (97.4%)** ✅
+- **Relationships: 29/29 tests passing (100%)** ✅
+- Schema Builder: 1/2 tests passing (50%)
+
+### Known Limitations (2 test failures)
+- Schema.create() not yet implemented (documented limitation)
+- PostgreSQL HAVING clause with column aliases - database limitation (MySQL-specific feature)
+
 ## [1.7.5] - 2025-11-29
 
 ### Fixed

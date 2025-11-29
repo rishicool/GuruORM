@@ -63,7 +63,7 @@ export class HasMany extends Relation {
     for (const model of models) {
       const key = model.getAttribute(this.localKey);
       if (dictionary[key]) {
-        model['relations'][relation] = new Collection(dictionary[key]);
+        model['relations'][relation] = new Collection(...dictionary[key]);
       }
     }
 
