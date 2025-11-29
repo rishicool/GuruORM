@@ -30,9 +30,14 @@ export interface ConnectionConfig {
  */
 export interface ConnectionInterface {
   /**
-   * Get the connection name
+   * Get the connection name.
    */
   getName(): string | null;
+
+  /**
+   * Set the connection name.
+   */
+  setName(name: string): void;
 
   /**
    * Begin a fluent query against a database table

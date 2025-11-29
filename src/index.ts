@@ -8,16 +8,16 @@ export * from './Connection/PostgresConnection';
 export * from './Connection/SqliteConnection';
 export * from './Connection/SqlServerConnection';
 
-export * from './Query/Builder';
+export { Builder as QueryBuilder } from './Query/Builder';
 export * from './Query/Expression';
 export * from './Query/JoinClause';
 
-export * from './Schema/Builder';
+export { Builder as SchemaBuilder } from './Schema/Builder';
 export * from './Schema/Blueprint';
 
 export * from './Eloquent/Model';
-export * from './Eloquent/Builder';
-export * from './Eloquent/Collection';
+export { Builder as EloquentBuilder } from './Eloquent/Builder';
+export { Collection as EloquentCollection } from './Eloquent/Collection';
 
 export * from './Migrations/Migration';
 export * from './Migrations/Migrator';
@@ -26,7 +26,7 @@ export * from './Seeding/Seeder';
 
 export * from './Capsule/Manager';
 
-export * from './Support/Collection';
+export { Collection } from './Support/Collection';
 export * from './Support/helpers';
 
 // Default exports for convenience

@@ -283,7 +283,7 @@ export class Grammar {
    * Compile an insert statement into SQL
    */
   compileInsert(query: Builder, values: any[]): string {
-    const table = this.wrapTable(query['fromTable']);
+    const table = this.wrapTable(query['fromTable'] || '');
     
     if (values.length === 0) {
       return '';
@@ -301,7 +301,7 @@ export class Grammar {
    * Compile an update statement into SQL
    */
   compileUpdate(query: Builder, values: any): string {
-    const table = this.wrapTable(query['fromTable']);
+    const table = this.wrapTable(query['fromTable'] || '');
     
     const columns = Object.keys(values)
       .map((key) => `${this.wrap(key)} = ${this.parameter(values[key])}`)
@@ -316,7 +316,7 @@ export class Grammar {
    * Compile a delete statement into SQL
    */
   compileDelete(query: Builder): string {
-    const table = this.wrapTable(query['fromTable']);
+    const table = this.wrapTable(query['fromTable'] || '');
     const where = this.compileWheres(query, query['wheres']);
 
     return `delete from ${table} ${where}`.trim();

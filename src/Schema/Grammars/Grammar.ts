@@ -29,7 +29,7 @@ export class Grammar {
   /**
    * Wrap a value in keyword identifiers
    */
-  wrap(value: string): string {
+  protected wrap(value: string): string {
     if (value === '*') {
       return value;
     }

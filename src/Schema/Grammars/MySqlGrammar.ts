@@ -7,7 +7,7 @@ export class Grammar extends BaseGrammar {
   /**
    * Wrap a single string in keyword identifiers
    */
-  protected wrap(value: string): string {
+  public wrap(value: string): string {
     if (value === '*') {
       return value;
     }

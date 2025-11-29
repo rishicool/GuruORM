@@ -415,7 +415,7 @@ export class Builder {
 
     if (results.length > 0) {
       const result = Object.values(results[0])[0];
-      return result ? parseFloat(result) : 0;
+      return result ? parseFloat(String(result)) : 0;
     }
 
     return 0;
