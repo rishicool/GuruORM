@@ -1,1 +1,24 @@
-import { DB } from '../../src';\n\nexport default class UserseederSeeder {\n  async run() {\n    // Using raw SQL queries\n    await DB.insert('INSERT INTO users (name, email) VALUES (?, ?)', [\n      'Admin User',\n      'admin@example.com'\n    ]);\n\n    // Or using query builder\n    await DB.table('users').insert({\n      name: 'Test User',\n      email: 'test@example.com'\n    });\n\n    // Or using Eloquent models (if you have them)\n    // const User = require('../../models/User').default;\n    // await User.create({\n    //   name: 'Admin',\n    //   email: 'admin@example.com',\n    // });\n  }\n}
+import { DB } from '../../src';
+
+export default class UserseederSeeder {
+  async run() {
+    // Using raw SQL queries
+    await DB.insert('INSERT INTO users (name, email) VALUES (?, ?)', [
+      'Admin User',
+      'admin@example.com'
+    ]);
+
+    // Or using query builder
+    await DB.table('users').insert({
+      name: 'Test User',
+      email: 'test@example.com'
+    });
+
+    // Or using Eloquent models (if you have them)
+    // const User = require('../../models/User').default;
+    // await User.create({
+    //   name: 'Admin',
+    //   email: 'admin@example.com',
+    // });
+  }
+}

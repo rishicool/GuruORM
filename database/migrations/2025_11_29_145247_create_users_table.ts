@@ -1,8 +1,9 @@
 import { Schema } from '../../src';
+import type { Blueprint } from '../../src';
 
 export default class CreateUsersTable {
   async up() {
-    await Schema.create('users', (table) => {
+    await Schema.create('users', (table: Blueprint) => {
       table.id();
       table.string('name');
       table.string('email').unique();

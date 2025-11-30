@@ -158,8 +158,11 @@ export class Migrator {
         };
       }
 
-      await migration.up();
-      await this.logMigration(migrationFile.name, batch);
+      // Wrap migration in transaction for atomicity
+      await this.connection.transaction(async () => {
+        await migration.up();
+        await this.logMigration(migrationFile.name, batch);
+      });
 
       const time = Date.now() - startTime;
       await dispatchMigrationEnded(migrationFile.name, batch, 'up');
@@ -208,8 +211,11 @@ export class Migrator {
         };
       }
 
-      await migration.down();
-      await this.removeMigrationLog(migrationRecord.migration);
+      // Wrap rollback in transaction for atomicity
+      await this.connection.transaction(async () => {
+        await migration.down();
+        await this.removeMigrationLog(migrationRecord.migration);
+      });
 
       const time = Date.now() - startTime;
       return {
@@ -240,19 +246,18 @@ export class Migrator {
    * Create the migration table if it doesn't exist
    */
   protected async createMigrationTable(): Promise<void> {
-    const exists = await this.connection.select(
-      `SELECT 1 FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = ?`,
-      [this.migrationTable]
-    );
-
-    if (exists.length === 0) {
-      await this.connection.statement(`
-        CREATE TABLE ${this.migrationTable} (
-          id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-          migration VARCHAR(255) NOT NULL,
-          batch INT NOT NULL
-        )
-      `);
+    const driverName = this.connection.getDriverName();
+    const schema = this.connection.getSchemaBuilder();
+    
+    const hasTable = await schema.hasTable(this.migrationTable);
+    
+    if (!hasTable) {
+      // Create table using Schema Builder for database compatibility
+      await schema.create(this.migrationTable, (table: any) => {
+        table.increments('id');
+        table.string('migration');
+        table.integer('batch');
+      });
     }
   }
 

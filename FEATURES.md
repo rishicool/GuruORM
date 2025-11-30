@@ -6,10 +6,29 @@ This document provides a clear overview of what's working and what's planned in 
 
 ### 1. Database Connections
 - ✅ Multiple database support (MySQL, PostgreSQL, SQLite, SQL Server)
-- ✅ Connection pooling
+- ✅ **Connection pooling with configurable pool sizes**
 - ✅ Multiple connection management
 - ✅ Automatic reconnection
 - ✅ Transaction support
+- ✅ **Pool configuration**: min, max, timeout settings
+- ✅ **Production-ready defaults**
+
+**Pool Configuration Example:**
+```javascript
+capsule.addConnection({
+  driver: 'postgres',
+  host: 'localhost',
+  database: 'mydb',
+  username: 'user',
+  password: 'pass',
+  pool: {
+    min: 2,                    // Minimum connections
+    max: 10,                   // Maximum connections
+    acquireTimeoutMillis: 30000,
+    idleTimeoutMillis: 30000,
+  },
+});
+```
 
 ### 2. Schema Builder
 - ✅ `Schema.create()` - Create tables with fluent API
@@ -141,13 +160,33 @@ const users = await User.with('posts').get();
 - ✅ `up()` and `down()` methods
 - ✅ Migration runner: `npx guruorm migrate`
 - ✅ Rollback: `npx guruorm migrate:rollback`
-- ✅ Migration status tracking
-- ✅ Batch migrations
+- ✅ Reset: `npx guruorm migrate:reset`
+- ✅ Refresh: `npx guruorm migrate:refresh`
+- ✅ Fresh: `npx guruorm migrate:fresh`
+- ✅ Status: `npx guruorm migrate:status`
+- ✅ Migration status tracking with `migrations` table
+- ✅ Batch tracking for selective rollbacks
+- ✅ **Transaction-wrapped migrations** - Each migration runs in a transaction
+- ✅ **Dry run mode** - `--pretend` flag to preview SQL
+- ✅ **Production safety** - `--force` required in production
+- ✅ Database-agnostic migration table creation
 
 **Example:**
 ```bash
+# Create migration
 npx guruorm make:migration create_users_table
+
+# Run migrations
 npx guruorm migrate
+
+# Preview without executing
+npx guruorm migrate --pretend
+
+# Rollback last batch
+npx guruorm migrate:rollback
+
+# Check migration status
+npx guruorm migrate:status
 ```
 
 ### 9. Seeders
