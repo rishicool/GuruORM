@@ -56,5 +56,41 @@ export { QueryLogger, QueryLog, QueryListener } from './Support/QueryLogger';
 
 // Default exports for convenience
 export { Manager as Capsule } from './Capsule/Manager';
-export { ConnectionManager as DB } from './Connection/ConnectionManager';
-export { Builder as Schema } from './Schema/Builder';
+export { Manager as DB } from './Capsule/Manager';
+
+// Schema needs to be created from a connection, so we'll export a helper
+import { Manager } from './Capsule/Manager';
+const Schema = {
+  create: async (table: string, callback: any) => {
+    return Manager.schema().create(table, callback);
+  },
+  table: async (table: string, callback: any) => {
+    return Manager.schema().table(table, callback);
+  },
+  drop: async (table: string) => {
+    return Manager.schema().drop(table);
+  },
+  dropIfExists: async (table: string) => {
+    return Manager.schema().dropIfExists(table);
+  },
+  hasTable: async (table: string) => {
+    return Manager.schema().hasTable(table);
+  },
+  hasColumn: async (table: string, column: string) => {
+    return Manager.schema().hasColumn(table, column);
+  },
+  rename: async (from: string, to: string) => {
+    return Manager.schema().rename(from, to);
+  },
+  enableForeignKeyConstraints: async () => {
+    return Manager.schema().enableForeignKeyConstraints();
+  },
+  disableForeignKeyConstraints: async () => {
+    return Manager.schema().disableForeignKeyConstraints();
+  },
+  withoutForeignKeyConstraints: async (callback: () => Promise<void>) => {
+    return Manager.schema().withoutForeignKeyConstraints(callback);
+  },
+};
+
+export { Schema };

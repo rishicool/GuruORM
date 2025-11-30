@@ -243,16 +243,16 @@ npx guruorm --help
 # Initialize guruORM
 npx guruorm init
 
-# Create migration (coming soon)
+# Create migration
 npx guruorm make:migration create_users_table
 
-# Run migrations (coming soon)
+# Run migrations
 npx guruorm migrate
 
-# Create seeder (coming soon)
+# Create seeder
 npx guruorm make:seeder UserSeeder
 
-# Run seeders (coming soon)
+# Run seeders
 npx guruorm db:seed
 ```
 

@@ -1,10 +1,1 @@
-export default class DatabaseSeeder {
-  async run() {
-    // Seed your database here
-    // Example:
-    // await User.create({
-    //   name: 'Admin',
-    //   email: 'admin@example.com',
-    // });
-  }
-}
+import { DB } from '../../src';\n\nexport default class UserseederSeeder {\n  async run() {\n    // Using raw SQL queries\n    await DB.insert('INSERT INTO users (name, email) VALUES (?, ?)', [\n      'Admin User',\n      'admin@example.com'\n    ]);\n\n    // Or using query builder\n    await DB.table('users').insert({\n      name: 'Test User',\n      email: 'test@example.com'\n    });\n\n    // Or using Eloquent models (if you have them)\n    // const User = require('../../models/User').default;\n    // await User.create({\n    //   name: 'Admin',\n    //   email: 'admin@example.com',\n    // });\n  }\n}

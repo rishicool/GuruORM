@@ -1,15 +1,15 @@
-export default class CreateUsersTable {
+import { Schema } from '../../src';
+
+export default class AddEmailColumn {
   async up() {
-    // Schema.create implementation will be available in Phase 3
-    // await Schema.create('users', (table) => {
-    //   table.id();
-    //   table.string('name');
-    //   table.string('email').unique();
-    //   table.timestamps();
-    // });
+    await Schema.table('test', (table) => {
+      table.string('email').nullable();
+    });
   }
 
   async down() {
-    // await Schema.dropIfExists('users');
+    await Schema.table('test', (table) => {
+      table.dropColumn('email');
+    });
   }
 }

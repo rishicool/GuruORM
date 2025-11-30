@@ -19,6 +19,7 @@
 - 🛠️ **CLI Tools** - Powerful command-line interface
 - ✨ **Zero Config** - Works out of the box with JavaScript projects
 
+👉 **[Complete Features List](FEATURES.md)** - See what's working and what's planned  
 👉 **[Complete Database Drivers Guide](DATABASE.md)** - MySQL, PostgreSQL, SQLite, SQL Server examples
 
 ## 🙏 Acknowledgment
@@ -76,18 +77,37 @@ capsule.bootEloquent();
 
 **JavaScript:**
 ```javascript
-const { DB } = require('guruorm');
+const { DB, Schema } = require('guruorm');
 
-// Simple query
-const users = await DB.table('users').where('active', true).get();
+// Create schema
+await Schema.create('users', (table) => {
+  table.id();
+  table.string('name');
+  table.string('email').unique();
+  table.boolean('active').defaultTo(true);
+  table.timestamps();
+});
 
-// Query builder with joins
-const results = await DB.table('users')
-  .select('users.*', 'contacts.phone')
-  .join('contacts', 'users.id', '=', 'contacts.user_id')
-  .where('users.active', true)
+// Raw SQL queries
+const users = await DB.select('SELECT * FROM users WHERE active = ?', [true]);
+
+// Query builder
+const activeUsers = await DB.table('users')
+  .where('active', true)
   .orderBy('name')
   .get();
+
+// Insert data
+await DB.insert('INSERT INTO users (name, email) VALUES (?, ?)', [
+  'John Doe',
+  'john@example.com'
+]);
+
+// Or using query builder
+await DB.table('users').insert({
+  name: 'Jane Smith',
+  email: 'jane@example.com'
+});
 ```
 
 ### Your First Model
@@ -156,15 +176,15 @@ GuruORM provides comprehensive, easy-to-follow documentation.
 - **[Eloquent ORM](docs/eloquent.md)** - Work with your database using elegant Active Record models
 - **[Relationships](docs/relationships.md)** - Define and query model relationships (One-to-One, One-to-Many, Many-to-Many)
 - **[Migrations](docs/migrations.md)** - Version control for your database schema
-- **[Seeding](docs/seeding.md)** - Populate your database with test data *(Coming Soon)*
+- **[Seeding](docs/seeding.md)** - Populate your database with test data
 
 ### Additional Topics
 
-- **Collections** - Work with collections of data *(Coming Soon)*
-- **Events & Observers** - Hook into model lifecycle events *(Coming Soon)*
-- **Mutators & Casting** - Transform model attributes *(Coming Soon)*
-- **Advanced Queries** - Subqueries, unions, and raw expressions *(Coming Soon)*
-- **Testing** - Test your database interactions *(Coming Soon)*
+- **Collections** - Work with collections of data
+- **Events & Observers** - Hook into model lifecycle events
+- **Mutators & Casting** - Transform model attributes
+- **Advanced Queries** - Subqueries, unions, and raw expressions
+- **Testing** - Test your database interactions
 
 ---
 
