@@ -227,11 +227,28 @@ const popularUsers = await User.where('votes', '>', 100)
 // Eager loading relationships
 const users = await User.with(['posts', 'roles']).get();
 
+// Constrained lazy eager loading (v1.12.0)
+await user.load({
+  posts: query => query.where('published', true).orderBy('created_at', 'desc')
+});
+
 // Querying relationships
 const userPosts = await user.posts()
   .where('published', true)
   .orderBy('created_at', 'desc')
   .get();
+
+// Touch timestamps (v1.11.0)
+await user.touch(); // Update updated_at
+await comment.touchOwners(); // Update parent timestamps
+
+// Model observers (v1.10.0)
+User.observe({
+  creating: (user) => console.log('Creating user...'),
+  created: (user) => console.log('User created!'),
+  updating: (user) => console.log('Updating user...'),
+  updated: (user) => console.log('User updated!')
+});
 ```
 
 ### Migration Examples
@@ -366,12 +383,14 @@ const john = await User.find(1);
 | Component | Completion | Status |
 |-----------|-----------|---------|
 | Query Builder | 98% | ⭐⭐⭐⭐⭐ |
-| Eloquent ORM | 95% | ⭐⭐⭐⭐⭐ |
+| Eloquent ORM | 97% | ⭐⭐⭐⭐⭐ |
+| Relationships | 97% | ⭐⭐⭐⭐⭐ |
 | Schema Builder | 90% | ⭐⭐⭐⭐ |
 | Migrations | 90% | ⭐⭐⭐⭐ |
 | Seeding | 95% | ⭐⭐⭐⭐⭐ |
+| Events & Observers | 95% | ⭐⭐⭐⭐⭐ |
 | Testing Utilities | 70% | ⭐⭐⭐ |
-| **Overall** | **91%** | **⭐⭐⭐⭐** |
+| **Overall** | **~94%** | **⭐⭐⭐⭐⭐** |
 
 ---
 

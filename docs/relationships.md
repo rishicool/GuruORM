@@ -356,6 +356,53 @@ const users = await User.with({
 }).get();
 ```
 
+## Lazy Eager Loading
+
+Sometimes you may need to eager load a relationship after the parent model has already been retrieved. For example, this may be useful if you need to dynamically decide whether to load related models:
+
+```typescript
+import Book from './models/Book';
+
+const books = await Book.all();
+
+if (someCondition) {
+  await books.load('author');
+}
+```
+
+If you need to set additional query constraints on the eager loading query, you may pass an object to the `load` method. The object keys should be relationship names and the values should be callback functions that receive the query instance:
+
+```typescript
+await author.load({
+  books: (query) => query.where('published', true).orderBy('created_at', 'desc')
+});
+```
+
+To load a relationship only when it has not already been loaded, use the `loadMissing` method:
+
+```typescript
+await book.loadMissing('author');
+
+// With constraints
+await book.loadMissing({
+  author: (query) => query.where('active', true)
+});
+```
+
+### Nested Lazy Eager Loading
+
+You can also lazy load nested relationships using dot notation:
+
+```typescript
+await author.load('books.publisher');
+```
+
+If you would like to load the `books` relationship, as well as the `publisher` and `ratings` relationships on the books, you may use the following:
+
+```typescript
+await author.load(['books.publisher', 'books.ratings']);
+```
+
 ## Inserting & Updating Related Models
 
 ### The `save` Method

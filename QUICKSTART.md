@@ -124,32 +124,83 @@ npx guruorm make:migration create_users_table --create=users
 npx guruorm migrate
 ```
 
-## Available Now (v1.6.0 - 91% Complete!)
+## Available Now (v1.12.0 - 94% Complete!)
 
 ✅ **Database Connection** - MySQL, PostgreSQL, SQLite, SQL Server  
 ✅ **Query Builder** - Complete (98%) with joins, unions, subqueries  
-✅ **Eloquent ORM** - Complete (95%) with all relationships  
+✅ **Eloquent ORM** - Complete (97%) with all relationships  
+✅ **Relationships** - Complete (97%) with constrained lazy eager loading  
 ✅ **Schema Builder** - Complete (90%) with migrations  
 ✅ **Migrations** - Complete (90%) with rollback, fresh, refresh  
 ✅ **Seeding** - Complete (95%) with factories  
+✅ **Events & Observers** - Complete (95%) with model lifecycle hooks  
 ✅ **CLI Commands** - 14 commands (migrate, seed, make:migration, etc.)  
-✅ **Relationships** - One-to-One, One-to-Many, Many-to-Many, Polymorphic  
 ✅ **Soft Deletes** - Full support  
-✅ **Events** - Model lifecycle events  
 ✅ **Scopes** - Local and global scopes  
 ✅ **Chunking & Lazy Loading** - Memory-efficient processing  
 ✅ **Cursor Pagination** - Constant-speed pagination  
+✅ **Touch Timestamps** - Update parent timestamps (v1.11.0)  
+✅ **Constrained Lazy Loading** - Load relations with query constraints (v1.12.0)  
 ✅ **JavaScript & TypeScript** - Works with both!  
 
-## Coming Soon (Next 9%)
+## Latest Features (v1.12.0)
 
+### Constrained Lazy Eager Loading
+```typescript
+// Load relations after retrieval with query constraints
+const user = await User.find(1);
+
+await user.load({
+  posts: query => query.where('published', true).orderBy('created_at', 'desc'),
+  comments: query => query.where('approved', true).limit(10)
+});
+```
+
+### Model Touch & Relationship Touching (v1.11.0)
+```typescript
+// Update timestamps
+await user.touch(); // Updates updated_at
+
+// Touch parent timestamps when child changes
+class Comment extends Model {
+  protected touches = ['post']; // Updates post.updated_at when comment changes
+  
+  post() {
+    return this.belongsTo(Post);
+  }
+}
+```
+
+### Observer Pattern (v1.10.0)
+```typescript
+// Group all event listeners in one class
+class UserObserver {
+  creating(user) {
+    console.log('Creating user...');
+  }
+  
+  created(user) {
+    console.log('User created!');
+  }
+  
+  updating(user) {
+    console.log('Updating user...');
+  }
+}
+
+User.observe(new UserObserver());
+```
+
+## Coming Soon (Next 6%)
+
+🚧 Enhanced Attribute Casts (AsArrayObject, AsCollection, AsEncrypted)  
+🚧 Database Testing Assertions (assertDatabaseHas, assertDatabaseMissing)  
+🚧 Model Pruning System (Prunable trait, model:prune command)  
 🚧 Database Events (QueryExecuted, TransactionCommitted)  
 🚧 Connection Resolver & Switching  
 🚧 Read/Write Connection Splitting  
 🚧 Lateral Joins (PostgreSQL, MySQL 8+)  
 🚧 JSON Column Operators (->)  
-🚧 Vector Column Support  
-🚧 Complete Testing Utilities  
 🚧 Schema Dumping  
 
 ## Need Help?
