@@ -1898,12 +1898,19 @@ export class Model {
   /**
    * Eager load relations on the model
    */
-  async load(relations: string | string[] | Record<string, Function>): Promise<this> {
-    const relationsArray = typeof relations === 'string' ? [relations] : 
-                          Array.isArray(relations) ? relations : 
-                          Object.keys(relations);
+  async load(relations: string | string[] | Record<string, Function | undefined>): Promise<this> {
+    // Handle different input formats
+    let relationsToLoad: Record<string, Function | undefined> = {};
+    
+    if (typeof relations === 'string') {
+      relationsToLoad[relations] = undefined;
+    } else if (Array.isArray(relations)) {
+      relations.forEach(rel => relationsToLoad[rel] = undefined);
+    } else {
+      relationsToLoad = relations as Record<string, Function | undefined>;
+    }
 
-    for (const relation of relationsArray) {
+    for (const [relation, constraints] of Object.entries(relationsToLoad)) {
       // Check if this is a nested relation (e.g., 'posts.comments')
       if (relation.includes('.')) {
         const segments = relation.split('.');
@@ -1916,6 +1923,10 @@ export class Model {
             const relationInstance = (this as any)[firstRelation]();
             
             if (relationInstance && typeof relationInstance.getResults === 'function') {
+              // Apply constraints if provided for the first level
+              if (constraints && typeof constraints === 'function') {
+                constraints(relationInstance.getQuery());
+              }
               this.relations[firstRelation] = await relationInstance.getResults();
             }
           }
@@ -1942,6 +1953,10 @@ export class Model {
           const relationInstance = (this as any)[relation]();
           
           if (relationInstance && typeof relationInstance.getResults === 'function') {
+            // Apply constraints if provided
+            if (constraints && typeof constraints === 'function') {
+              constraints(relationInstance.getQuery());
+            }
             this.relations[relation] = await relationInstance.getResults();
           }
         }
@@ -1954,11 +1969,27 @@ export class Model {
   /**
    * Eager load relations on the model if they are not already eager loaded
    */
-  async loadMissing(relations: string | string[]): Promise<this> {
-    const relationsArray = typeof relations === 'string' ? [relations] : relations;
-    const missing = relationsArray.filter(relation => !this.relations[relation]);
+  async loadMissing(relations: string | string[] | Record<string, Function | undefined>): Promise<this> {
+    // Handle different input formats
+    let relationsToCheck: Record<string, Function | undefined> = {};
+    
+    if (typeof relations === 'string') {
+      relationsToCheck[relations] = undefined;
+    } else if (Array.isArray(relations)) {
+      relations.forEach(rel => relationsToCheck[rel] = undefined);
+    } else {
+      relationsToCheck = relations as Record<string, Function | undefined>;
+    }
 
-    if (missing.length > 0) {
+    // Filter to only missing relations
+    const missing: Record<string, Function | undefined> = {};
+    for (const [relation, constraints] of Object.entries(relationsToCheck)) {
+      if (!this.relations[relation]) {
+        missing[relation] = constraints;
+      }
+    }
+
+    if (Object.keys(missing).length > 0) {
       await this.load(missing);
     }
 

@@ -221,7 +221,7 @@
 - ✅ `withDefault()` - Default model for BelongsTo/HasOne ✨ v1.11.0
 - ✅ Eager loading with constraints
 - ✅ Lazy eager loading (`load()`)
-- ❌ Constrained lazy eager loading (`load(['posts' => fn($q) => ...])`)
+- ✅ Constrained lazy eager loading (`load(['posts' => fn($q) => ...])`) ✨ v1.12.0
 - ✅ Relationship existence queries
 - ✅ Relationship counting
 
@@ -552,7 +552,7 @@
 - **Migrations**: ~90% (CLI commands with --force/--step, events, migrator, batch tracking, up/down/shouldRun)
 - **Seeding**: ~95% (db:seed command, DatabaseSeeder, call(), factory for()/has() relationships)
 - **Testing**: ~70% (RefreshDatabase, DatabaseTransactions, DatabaseMigrations traits)
-- **Overall**: ~93% complete (up from 91%)
+- **Overall**: ~94% complete (up from 93%)
 
 ### ✅ Completed Features:
 1. ✅ Complete WHERE clause variations (date, JSON, full-text, any/all/none, today-based)
@@ -580,25 +580,25 @@
 23. ✅ Timestamp touching (v1.11.0: touch, touchOwners, $touches property)
 24. ✅ Relationship defaults (v1.11.0: withDefault for BelongsTo/HasOne)
 25. ✅ Attribute change tracking (getOriginal, wasChanged, getChanges, isDirty)
+26. ✅ Constrained lazy eager loading (v1.12.0: load({'posts': fn => ...}))
 
 ### 🚧 Remaining Priority Items:
-1. ❌ Constrained lazy eager loading (`load(['posts' => fn($q) => $q->where(...)])`)
-2. ❌ Enhanced attribute casting (AsArrayObject, AsCollection, AsEncrypted variants)
-3. ❌ Database assertions for testing
-4. ❌ Model pruning (Prunable trait)
-5. ❌ Lateral joins (PostgreSQL, MySQL 8+)
-6. ❌ JSON column operators (->)
-7. ❌ Custom paginators
-8. ❌ Connection resolver / switching
-9. ❌ Read/write connection splitting
-10. ❌ Database events (QueryExecuted, TransactionCommitted, etc.)
-11. ❌ Schema dumping (schema:dump command)
+1. ❌ Enhanced attribute casting (AsArrayObject, AsCollection, AsEncrypted variants)
+2. ❌ Database assertions for testing
+3. ❌ Model pruning (Prunable trait)
+4. ❌ Lateral joins (PostgreSQL, MySQL 8+)
+5. ❌ JSON column operators (->)
+6. ❌ Custom paginators
+7. ❌ Connection resolver / switching
+8. ❌ Read/write connection splitting
+9. ❌ Database events (QueryExecuted, TransactionCommitted, etc.)
+10. ❌ Schema dumping (schema:dump command)
 
 ### 📊 Feature Completion by Category:
 - Query Builder: 98% ⭐⭐⭐⭐⭐
-- Eloquent Models: 96% ⭐⭐⭐⭐⭐ (up from 95%)
+- Eloquent Models: 97% ⭐⭐⭐⭐⭐ (up from 96%)
 - Eloquent Collections: 85% ⭐⭐⭐⭐⭐
-- Relationships: 96% ⭐⭐⭐⭐⭐ (up from 95%)
+- Relationships: 97% ⭐⭐⭐⭐⭐ (up from 96%)
 - Schema Builder: 90% ⭐⭐⭐⭐⭐
 - Migrations: 90% ⭐⭐⭐⭐⭐
 - Factories: 95% ⭐⭐⭐⭐⭐
