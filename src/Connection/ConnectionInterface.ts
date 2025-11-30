@@ -2,7 +2,7 @@
  * Database connection configuration interface
  */
 export interface ConnectionConfig {
-  driver: 'mysql' | 'pgsql' | 'sqlite' | 'sqlserver';
+  driver: 'mysql' | 'postgres' | 'pgsql' | 'postgresql' | 'sqlite' | 'sqlite3' | 'sqlserver' | 'mssql';
   host?: string;
   port?: number;
   database: string;

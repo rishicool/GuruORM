@@ -48,11 +48,15 @@ export class ConnectionManager {
     switch (config.driver) {
       case 'mysql':
         return new MySqlConnection(config);
+      case 'postgres':
       case 'pgsql':
+      case 'postgresql':
         return new PostgresConnection(config) as any; // Placeholder
       case 'sqlite':
+      case 'sqlite3':
         return new SqliteConnection(config) as any; // Placeholder
       case 'sqlserver':
+      case 'mssql':
         return new SqlServerConnection(config) as any; // Placeholder
       default:
         throw new Error(`Unsupported driver [${config.driver}]`);
