@@ -74,12 +74,20 @@ export class Model {
     this.fill(attributes);
     this.bootIfNotBooted();
     
+    // Store the actual constructor before Proxy wraps it
+    const actualConstructor = this.constructor;
+    
     // Return a Proxy to intercept property access for attributes
     return new Proxy(this, {
       get(target: any, prop: string | symbol, receiver: any) {
         // If it's a symbol, return it directly
         if (typeof prop === 'symbol') {
           return target[prop];
+        }
+        
+        // Return actual constructor, not Proxy's constructor
+        if (prop === 'constructor') {
+          return actualConstructor;
         }
         
         // List of known Model class properties
@@ -840,11 +848,18 @@ export class Model {
    * Get the table associated with the model
    */
   getTable(): string {
+    // First check instance property
     if (this.table) {
       return this.table;
     }
 
-    // Use class name as table name (pluralized and snake_cased)
+    // Then check static property on the constructor
+    const constructor = this.constructor as typeof Model;
+    if ((constructor as any).table) {
+      return (constructor as any).table;
+    }
+
+    // Finally fall back to pluralized class name
     const className = this.constructor.name;
     return this.snake(className) + 's';
   }
