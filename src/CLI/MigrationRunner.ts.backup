@@ -10,36 +10,12 @@ export class MigrationRunner {
   protected capsule: Capsule;
   protected migrator: Migrator;
   protected migrationsPath: string;
-  protected config: any;
 
   constructor() {
-    this.config = this.loadConfig();
-    this.migrationsPath = this.getMigrationsPath();
+    this.migrationsPath = path.join(process.cwd(), 'database', 'migrations');
     this.capsule = this.loadConnection();
     this.migrator = new Migrator(this.capsule.connection() as any);
     this.migrator.addPath(this.migrationsPath);
-  }
-
-  /**
-   * Load guruorm.config.js if exists
-   */
-  protected loadConfig(): any {
-    const configPath = path.join(process.cwd(), 'guruorm.config.js');
-    if (fs.existsSync(configPath)) {
-      return require(configPath);
-    }
-    return null;
-  }
-
-  /**
-   * Get migrations path from config or use default
-   */
-  protected getMigrationsPath(): string {
-    if (this.config && this.config.migrations && this.config.migrations.path) {
-      const configPath = this.config.migrations.path;
-      return path.isAbsolute(configPath) ? configPath : path.join(process.cwd(), configPath);
-    }
-    return path.join(process.cwd(), 'database', 'migrations');
   }
 
   /**
@@ -48,8 +24,13 @@ export class MigrationRunner {
   protected loadConnection(): Capsule {
     const capsule = new Capsule();
     
-    if (this.config) {
-      const config = this.config;
+    // Try to load from guruorm.config.js or .env
+    const configPath = path.join(process.cwd(), 'guruorm.config.js');
+    
+    if (fs.existsSync(configPath)) {
+      const config = require(configPath);
+      
+      // Support Laravel-style config with connections
       if (config.connections && config.default) {
         const connectionName = config.default;
         const connectionConfig = config.connections[connectionName];
