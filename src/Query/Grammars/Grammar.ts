@@ -213,7 +213,7 @@ export class Grammar {
    */
   protected compileAggregate(query: Builder, aggregate: any): string {
     const column = this.columnize(aggregate.columns);
-    return `select ${aggregate.function}(${column}) as aggregate`;
+    return `select ${aggregate.function}(${column}) as "aggregate"`;
   }
 
   /**
