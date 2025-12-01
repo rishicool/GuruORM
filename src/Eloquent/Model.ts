@@ -1444,6 +1444,9 @@ export class Model {
     // Create base model instance using Object.create to copy properties
     const model = Object.create(Object.getPrototypeOf(this));
     
+    // Store the actual constructor BEFORE wrapping in Proxy
+    const actualConstructor = this.constructor;
+    
     // Copy model properties as non-enumerable to keep Object.keys() clean
     const propertiesToCopy = [
       'table', 'primaryKey', 'keyType', 'incrementing', 'timestamps', 'dateFormat', 'connection',
@@ -1484,6 +1487,11 @@ export class Model {
       get(target: any, prop: string | symbol, receiver: any) {
         if (typeof prop === 'symbol') {
           return Reflect.get(target, prop, receiver);
+        }
+        
+        // Return actual constructor, not Proxy's constructor
+        if (prop === 'constructor') {
+          return actualConstructor;
         }
         
         const modelProperties = [

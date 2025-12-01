@@ -238,7 +238,23 @@ export class Migrator {
    */
   protected async loadMigration(file: MigrationFile): Promise<Migration> {
     const migrationModule = require(file.path);
-    const MigrationClass = migrationModule.default || Object.values(migrationModule)[0];
+    
+    // Support multiple export formats:
+    // 1. ES6 default export: export default class
+    // 2. CommonJS: module.exports = class
+    // 3. Named exports: export class Migration
+    let MigrationClass;
+    
+    if (migrationModule.default) {
+      MigrationClass = migrationModule.default;
+    } else if (typeof migrationModule === 'function') {
+      // CommonJS: module.exports = ClassName
+      MigrationClass = migrationModule;
+    } else {
+      // Named export or object with exports
+      MigrationClass = Object.values(migrationModule)[0];
+    }
+    
     return new (MigrationClass as any)();
   }
 

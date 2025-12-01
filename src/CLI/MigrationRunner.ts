@@ -29,7 +29,23 @@ export class MigrationRunner {
     
     if (fs.existsSync(configPath)) {
       const config = require(configPath);
-      capsule.addConnection(config.default || config);
+      
+      // Support Laravel-style config with connections
+      if (config.connections && config.default) {
+        const connectionName = config.default;
+        const connectionConfig = config.connections[connectionName];
+        if (connectionConfig) {
+          capsule.addConnection(connectionConfig);
+        } else {
+          throw new Error(`Connection [${connectionName}] not found in config`);
+        }
+      } else if (config.default) {
+        // Direct config object in 'default' key
+        capsule.addConnection(config.default);
+      } else {
+        // Whole config is the connection
+        capsule.addConnection(config);
+      }
     } else {
       // Load from environment variables
       const driver = (process.env.DB_DRIVER || 'mysql') as 'mysql' | 'pgsql' | 'sqlite' | 'sqlserver';

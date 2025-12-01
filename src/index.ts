@@ -54,42 +54,60 @@ export { Collection } from './Support/Collection';
 export * from './Support/helpers';
 export { QueryLogger, QueryLog, QueryListener } from './Support/QueryLogger';
 
-// Default exports for convenience
-export { Manager as Capsule } from './Capsule/Manager';
-export { Manager as DB } from './Capsule/Manager';
-
-// Schema needs to be created from a connection, so we'll export a helper
+// Import Manager for instance creation
 import { Manager } from './Capsule/Manager';
+
+// Export both the class and provide a lazy singleton getter
+export { Manager as Capsule } from './Capsule/Manager';
+export { Manager } from './Capsule/Manager';
+
+// Create a lazy-initialized singleton that uses Manager.getInstance()
+export const DB = new Proxy({} as Manager, {
+  get(target, prop) {
+    try {
+      // Try to get the global instance set by MigrationRunner or user code
+      const instance = Manager.getInstance();
+      return (instance as any)[prop];
+    } catch (e) {
+      // No global instance yet, create one
+      const instance = new Manager();
+      instance.setAsGlobal();
+      return (instance as any)[prop];
+    }
+  }
+});
+
+// Schema helper that uses the global instance via Manager.getInstance()
 const Schema = {
   create: async (table: string, callback: any) => {
-    return Manager.schema().create(table, callback);
+    return Manager.getInstance().schema().create(table, callback);
   },
   table: async (table: string, callback: any) => {
-    return Manager.schema().table(table, callback);
+    return Manager.getInstance().schema().table(table, callback);
   },
   drop: async (table: string) => {
-    return Manager.schema().drop(table);
+    return Manager.getInstance().schema().drop(table);
   },
   dropIfExists: async (table: string) => {
-    return Manager.schema().dropIfExists(table);
+    return Manager.getInstance().schema().dropIfExists(table);
   },
   hasTable: async (table: string) => {
-    return Manager.schema().hasTable(table);
+    return Manager.getInstance().schema().hasTable(table);
   },
   hasColumn: async (table: string, column: string) => {
-    return Manager.schema().hasColumn(table, column);
+    return Manager.getInstance().schema().hasColumn(table, column);
   },
   rename: async (from: string, to: string) => {
-    return Manager.schema().rename(from, to);
+    return Manager.getInstance().schema().rename(from, to);
   },
   enableForeignKeyConstraints: async () => {
-    return Manager.schema().enableForeignKeyConstraints();
+    return Manager.getInstance().schema().enableForeignKeyConstraints();
   },
   disableForeignKeyConstraints: async () => {
-    return Manager.schema().disableForeignKeyConstraints();
+    return Manager.getInstance().schema().disableForeignKeyConstraints();
   },
   withoutForeignKeyConstraints: async (callback: () => Promise<void>) => {
-    return Manager.schema().withoutForeignKeyConstraints(callback);
+    return Manager.getInstance().schema().withoutForeignKeyConstraints(callback);
   },
 };
 

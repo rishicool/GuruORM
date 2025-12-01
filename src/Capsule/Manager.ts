@@ -49,6 +49,11 @@ export class Manager {
 
     if (name === 'default') {
       this.manager.setDefaultConnection(name);
+      
+      // Auto-bootstrap Eloquent when default connection is added
+      if (this.connections.size === 1) {
+        this.bootEloquent();
+      }
     }
   }
 
