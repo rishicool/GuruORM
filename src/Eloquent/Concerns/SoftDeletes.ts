@@ -1,4 +1,5 @@
 import { Model } from '../Model';
+import { Builder as EloquentBuilder } from '../Builder';
 
 /**
  * Model with soft delete support
@@ -14,6 +15,26 @@ export class SoftDeleteModel extends Model {
    * Indicates if the model is currently force deleting
    */
   protected forceDeleting = false;
+
+  /**
+   * Get a new query builder for the model's table
+   * Automatically excludes soft deleted records
+   */
+  newQuery(): EloquentBuilder {
+    const query = super.newQuery();
+    
+    // Automatically filter out soft deleted records
+    query.whereNull(this.getDeletedAtColumn());
+    
+    return query;
+  }
+
+  /**
+   * Get a new query builder without soft delete scope
+   */
+  newQueryWithoutScopes(): EloquentBuilder {
+    return super.newQuery();
+  }
 
   /**
    * Determine if the model instance has been soft-deleted
@@ -37,16 +58,22 @@ export class SoftDeleteModel extends Model {
     }
 
     // Set the deleted_at column to null
-    this.setAttribute(this.getDeletedAtColumn(), null);
+    const column = this.getDeletedAtColumn();
+    this.setAttribute(column, null);
 
-    // Save the model
-    this.exists = true;
-    const result = await this.save();
+    // Update directly without soft delete scope
+    const query = this.newQueryWithoutScopes();
+    await query.where(this.primaryKey, this.getKey()).update({
+      [column]: null,
+    });
+
+    // Sync the change
+    this.syncOriginal();
 
     // Fire the restored event
     await this.fireModelEvent('restored', false);
 
-    return result;
+    return true;
   }
 
   /**
@@ -83,8 +110,16 @@ export class SoftDeleteModel extends Model {
    */
   protected async performDeleteOnModel(): Promise<boolean> {
     if (this.forceDeleting) {
-      // Hard delete
-      return await super.performDeleteOnModel();
+      // Hard delete - use query without soft delete scope
+      const query = this.newQueryWithoutScopes().where(this.primaryKey, this.getKey());
+      await query.delete();
+
+      this.exists = false;
+
+      // Fire the deleted event
+      await this.fireModelEvent('deleted', false);
+
+      return true;
     }
 
     // Soft delete - just update the deleted_at timestamp

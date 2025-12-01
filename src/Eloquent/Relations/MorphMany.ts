@@ -37,6 +37,9 @@ export class MorphMany extends Relation {
     this.morphType = morphType;
     this.foreignKey = foreignKey;
     this.localKey = localKey;
+    
+    // Add the relationship constraints
+    this.addConstraints();
   }
 
   /**

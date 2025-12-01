@@ -106,7 +106,7 @@ await DB.table('users').chunkById(100, async (users) => {
 
 ### Streaming Results Lazily
 
-The `lazy()` method works similarly to the `chunk()` method in the sense that it executes the query in chunks. However, instead of passing each chunk into a callback, the `lazy()` method returns a generator, allowing you to interact with the results as a single stream:
+The `lazy()` method works similarly to the `chunk()` method in the sense that it executes the query in chunks. However, instead of passing each chunk into a callback, the `lazy()` method returns an async generator, allowing you to interact with the results as a single stream:
 
 ```typescript
 for await (const user of DB.table('users').lazy()) {
@@ -114,7 +114,15 @@ for await (const user of DB.table('users').lazy()) {
 }
 ```
 
-Once again, if you plan to update the retrieved records while iterating over them, it is best to use the `lazyById()` method instead:
+You may specify the chunk size as an argument:
+
+```typescript
+for await (const user of DB.table('users').lazy(500)) {
+  // Process user in chunks of 500
+}
+```
+
+Once again, if you plan to update the retrieved records while iterating over them, it is best to use the `lazyById()` method instead. This method will use the `id` column to avoid skipping or duplicating records:
 
 ```typescript
 for await (const user of DB.table('users').lazyById()) {
@@ -123,6 +131,26 @@ for await (const user of DB.table('users').lazyById()) {
     .update({ processed: true });
 }
 ```
+
+You may also specify a custom column for ordering:
+
+```typescript
+for await (const user of DB.table('users').lazyById(1000, 'created_at')) {
+  // Process using created_at for ordering
+}
+```
+
+### Cursor Iterator
+
+The `cursor()` method allows you to iterate through database records using a cursor, which will only execute a single query. This method is useful when processing large datasets where you want to minimize memory usage:
+
+```typescript
+for await (const user of DB.table('users').cursor()) {
+  // Only one user loaded in memory at a time
+}
+```
+
+> **Note:** Unlike `lazy()` which chunks records, `cursor()` loads one record at a time, providing maximum memory efficiency.
 
 ### Aggregates
 
@@ -447,6 +475,109 @@ const users = await DB.table('users')
   .get();
 ```
 
+You may also use `whereJsonContains` to check if a JSON array contains a value:
+
+```typescript
+const users = await DB.table('users')
+  .whereJsonContains('options->languages', 'en')
+  .get();
+```
+
+The `whereJsonDoesntContain` method checks if a value is not in a JSON array:
+
+```typescript
+const users = await DB.table('users')
+  .whereJsonDoesntContain('options->languages', 'fr')
+  .get();
+```
+
+Use `whereJsonLength` to check the length of a JSON array:
+
+```typescript
+const users = await DB.table('users')
+  .whereJsonLength('options->languages', '>', 2)
+  .get();
+```
+
+### Full Text Where Clauses
+
+The `whereFullText()` and `orWhereFullText()` methods may be used to add full text "where" clauses to a query for columns that have full text indexes:
+
+```typescript
+const posts = await DB.table('posts')
+  .whereFullText('content', 'web development')
+  .get();
+```
+
+You may search multiple columns:
+
+```typescript
+const posts = await DB.table('posts')
+  .whereFullText(['title', 'content'], 'guruorm database')
+  .get();
+```
+
+### Like Clauses
+
+The `whereLike()` method may be used for pattern matching. This is similar to using `where('column', 'like', '%pattern%')` but more convenient:
+
+```typescript
+const users = await DB.table('users')
+  .whereLike('name', 'John%')
+  .get();
+```
+
+The `orWhereLike()`, `whereNotLike()`, and `orWhereNotLike()` methods are also available:
+
+```typescript
+const users = await DB.table('users')
+  .whereLike('name', 'John%')
+  .orWhereLike('name', 'Jane%')
+  .get();
+
+const users = await DB.table('users')
+  .whereNotLike('email', '%@spam.com')
+  .get();
+```
+
+### Multi-Column Where Clauses
+
+**whereAny**
+
+The `whereAny()` method allows you to check if ANY of the specified columns match a condition:
+
+```typescript
+const users = await DB.table('users')
+  .whereAny(['first_name', 'last_name'], 'like', 'John%')
+  .get();
+```
+
+This is equivalent to:
+
+```sql
+WHERE (first_name LIKE 'John%' OR last_name LIKE 'John%')
+```
+
+**whereAll**
+
+The `whereAll()` method requires ALL specified columns to match the condition:
+
+```typescript
+const users = await DB.table('users')
+  .whereAll(['first_name', 'last_name', 'email'], '!=', null)
+  .get();
+```
+
+**whereNone**
+
+The `whereNone()` method requires NONE of the specified columns to match the condition:
+
+```typescript
+const users = await DB.table('users')
+  .whereNone(['suspended_at', 'deleted_at', 'banned_at'], '!=', null)
+  .get();
+```
+
 ### Additional Where Clauses
 
 **whereBetween / orWhereBetween**
@@ -680,6 +811,127 @@ const users = await DB.table('users')
   .get();
 ```
 
+## Pagination
+
+### Standard Pagination
+
+The `paginate()` method provides a simple way to paginate database results. This method automatically takes care of setting the query's `limit` and `offset` based on the current page being viewed by the user:
+
+```typescript
+const page = 1;
+const perPage = 15;
+
+const result = await DB.table('users').paginate(perPage, page);
+
+console.log(result.data);         // Array of user records
+console.log(result.total);        // Total number of records
+console.log(result.perPage);      // Records per page
+console.log(result.currentPage);  // Current page number
+console.log(result.lastPage);     // Last page number
+```
+
+The pagination result includes:
+- `data`: The records for the current page
+- `total`: Total count of all matching records
+- `perPage`: Number of records per page
+- `currentPage`: Current page number
+- `lastPage`: Calculated last page number
+
+You may also paginate Eloquent query results:
+
+```typescript
+const result = await User.where('active', true)
+  .orderBy('created_at', 'desc')
+  .paginate(20, 2);
+```
+
+### Simple Pagination
+
+If you only need to display "Next" and "Previous" links without showing all page numbers, you may use the `simplePaginate()` method. This is more efficient as it doesn't count total records:
+
+```typescript
+const result = await DB.table('users').simplePaginate(15, 1);
+
+console.log(result.data);         // Array of user records
+console.log(result.perPage);      // Records per page
+console.log(result.currentPage);  // Current page number
+console.log(result.hasMore);      // Boolean indicating if there are more pages
+```
+
+This is particularly useful for large datasets where counting total records would be expensive:
+
+```typescript
+const result = await DB.table('orders')
+  .where('status', 'pending')
+  .simplePaginate(50);
+
+if (result.hasMore) {
+  console.log('More orders available');
+}
+```
+
+### Cursor Pagination
+
+For even better performance with large datasets or infinite scrolling, use `cursorPaginate()`. This method uses a cursor (typically the last record's ID) instead of page numbers:
+
+```typescript
+// First page
+const result = await DB.table('posts')
+  .orderBy('id', 'asc')
+  .cursorPaginate(10);
+
+console.log(result.data);          // Array of records
+console.log(result.nextCursor);    // Cursor for next page
+console.log(result.prevCursor);    // Cursor for previous page
+console.log(result.hasMore);       // Boolean indicating more records
+
+// Next page using cursor
+const nextPage = await DB.table('posts')
+  .orderBy('id', 'asc')
+  .cursorPaginate(10, result.nextCursor);
+```
+
+You may specify a custom column for cursor-based pagination:
+
+```typescript
+const result = await DB.table('users')
+  .orderBy('created_at', 'desc')
+  .cursorPaginate(20, null, 'created_at');
+```
+
+Benefits of cursor pagination:
+- Consistent results even when data changes
+- Better performance for large offsets
+- No duplicate or skipped records
+- Ideal for infinite scroll interfaces
+
+### Pagination with Constraints
+
+All pagination methods work seamlessly with query constraints:
+
+```typescript
+// Standard pagination with filters
+const admins = await DB.table('users')
+  .where('role', 'admin')
+  .where('active', true)
+  .orderBy('name')
+  .paginate(25);
+
+// Simple pagination with joins
+const orders = await DB.table('orders')
+  .join('users', 'orders.user_id', '=', 'users.id')
+  .select('orders.*', 'users.name')
+  .where('orders.status', 'shipped')
+  .simplePaginate(50);
+
+// Cursor pagination with complex query
+const posts = await DB.table('posts')
+  .where('published', true)
+  .where('views', '>', 1000)
+  .orderBy('created_at', 'desc')
+  .cursorPaginate(15);
+```
+
 ## Insert Statements
 
 The query builder also provides an `insert()` method that may be used to insert records into the database table. The `insert()` method accepts an object of column names and values:
@@ -771,6 +1023,117 @@ If you wish to truncate an entire table, which will remove all records from the 
 ```typescript
 await DB.table('users').truncate();
 ```
+
+## Conditional Clauses
+
+### The `when` Method
+
+You may use the `when()` method to conditionally add query constraints. The closure will only be executed if the first argument evaluates to `true`:
+
+```typescript
+const role = req.query.role;
+
+const users = await DB.table('users')
+  .when(role, (query, role) => {
+    query.where('role', role);
+  })
+  .get();
+```
+
+You may pass a third argument to the `when()` method. This closure will execute if the first argument evaluates to `false`:
+
+```typescript
+const sortOrder = req.query.sort;
+
+const users = await DB.table('users')
+  .when(
+    sortOrder,
+    (query, sort) => {
+      query.orderBy('name', sort);
+    },
+    (query) => {
+      query.orderBy('created_at', 'desc');
+    }
+  )
+  .get();
+```
+
+### The `unless` Method
+
+The `unless()` method is the inverse of `when()`. It will execute the closure when the first argument is `false`:
+
+```typescript
+const includeBanned = req.query.includeBanned;
+
+const users = await DB.table('users')
+  .unless(includeBanned, (query) => {
+    query.where('status', '!=', 'banned');
+  })
+  .get();
+```
+
+Like `when()`, you may provide a default closure as the third argument:
+
+```typescript
+const users = await DB.table('users')
+  .unless(
+    isAdmin,
+    (query) => {
+      query.where('visible', true);
+    },
+    (query) => {
+      query.whereNotNull('admin_verified_at');
+    }
+  )
+  .get();
+```
+
+## Debugging
+
+### The `dump` and `dd` Methods
+
+You may use the `dd()` and `dump()` methods while building a query to dump the current query bindings and SQL. The `dd()` method will display the debug information and then stop executing the request. The `dump()` method will display the debug information but allow the request to continue executing:
+
+```typescript
+DB.table('users').where('votes', '>', 100).dd();
+
+DB.table('users').where('votes', '>', 100).dump();
+```
+
+### Raw SQL Output
+
+To see the raw SQL with bindings replaced, use the `toRawSql()` method:
+
+```typescript
+const sql = DB.table('users')
+  .where('votes', '>', 100)
+  .toRawSql();
+
+console.log(sql);
+// SELECT * FROM "users" WHERE "votes" > 100
+```
+
+The `dumpRawSql()` and `ddRawSql()` methods provide similar functionality:
+
+```typescript
+DB.table('users').where('votes', '>', 100).dumpRawSql();
+
+DB.table('users').where('votes', '>', 100).ddRawSql();
+```
+
+### Query Explanation
+
+To understand how the database will execute your query, use the `explain()` method:
+
+```typescript
+const explanation = await DB.table('users')
+  .where('email', 'john@example.com')
+  .explain();
+
+console.log(explanation);
+```
+
+This returns the query execution plan from your database, which is useful for optimizing slow queries.
 
 ## Pessimistic Locking
 

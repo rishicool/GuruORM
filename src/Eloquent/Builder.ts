@@ -605,7 +605,7 @@ export class Builder {
   unless(...args: any[]): this { return this.proxyToQueryBuilder('unless', args); }
 
   // Passthrough methods that return their results directly
-  async insert(values: any): Promise<boolean> { return this.query.insert(values); }
+  async insert(values: any): Promise<boolean | any[]> { return this.query.insert(values); }
   async insertGetId(values: any, sequence?: string): Promise<number> { return this.query.insertGetId(values, sequence); }
   async insertOrIgnore(values: any): Promise<number> { return this.query.insertOrIgnore(values); }
   async update(values: Record<string, any>): Promise<number> { return this.query.update(values); }

@@ -548,6 +548,348 @@ The many-to-many relationship also provides a `toggle` method which "toggles" th
 await user.roles().toggle([1, 2, 3]);
 ```
 
+## Has One Through
+
+The "has-one-through" relationship defines a one-to-one relationship with another model. However, this relationship indicates that the declaring model can be matched with one instance of another model by proceeding through a third model.
+
+For example, in a vehicle repair shop application, each `Mechanic` model may be associated with one `Car` model, and each `Car` model may be associated with one `Owner` model. While the mechanic and the owner have no direct relationship within the database, the mechanic can access the owner through the `Car` model. Let's look at the tables necessary to define this relationship:
+
+```
+mechanics
+  id - integer
+  name - string
+
+cars
+  id - integer
+  model - string
+  mechanic_id - integer
+
+owners
+  id - integer
+  name - string
+  car_id - integer
+```
+
+Now that we have examined the table structure for the relationship, let's define the relationship on the `Mechanic` model:
+
+```typescript
+import { Model } from 'guruorm';
+import Car from './Car';
+import Owner from './Owner';
+
+class Mechanic extends Model {
+  carOwner() {
+    return this.hasOneThrough(Owner, Car);
+  }
+}
+```
+
+The first argument passed to the `hasOneThrough` method is the name of the final model we wish to access, while the second argument is the name of the intermediate model.
+
+Once the relationship has been defined, we may retrieve the related model using Eloquent's dynamic properties:
+
+```typescript
+const owner = await mechanic.carOwner;
+```
+
+### Custom Keys
+
+Typical foreign key conventions will be used when performing the relationship's queries. If you would like to customize the keys of the relationship, you may pass them as the third, fourth, and fifth arguments to the `hasOneThrough` method:
+
+```typescript
+carOwner() {
+  return this.hasOneThrough(
+    Owner,
+    Car,
+    'mechanic_id', // Foreign key on the cars table
+    'car_id',      // Foreign key on the owners table
+    'id',          // Local key on the mechanics table
+    'id'           // Local key on the cars table
+  );
+}
+```
+
+## Has Many Through
+
+The "has-many-through" relationship provides a convenient way to access distant relationships via an intermediate relationship. For example, let's assume we are building a deployment platform like [Laravel Forge](https://forge.laravel.com). A `Country` model might have many `Post` models through an intermediate `User` model. In this example, you could easily gather all blog posts for a given country. Let's look at the tables required to define this relationship:
+
+```
+countries
+  id - integer
+  name - string
+
+users
+  id - integer
+  country_id - integer
+  name - string
+
+posts
+  id - integer
+  user_id - integer
+  title - string
+```
+
+Though `posts` does not contain a `country_id` column, the `hasManyThrough` relation provides access to a country's posts via `$country->posts`. To perform this query, Eloquent inspects the `country_id` column on the intermediate `users` table. After finding the matching user IDs, they are used to query the `posts` table.
+
+Now that we have examined the table structure for the relationship, let's define the relationship on the `Country` model:
+
+```typescript
+import { Model } from 'guruorm';
+import User from './User';
+import Post from './Post';
+
+class Country extends Model {
+  posts() {
+    return this.hasManyThrough(Post, User);
+  }
+}
+```
+
+The first argument passed to the `hasManyThrough` method is the name of the final model we wish to access, while the second argument is the name of the intermediate model.
+
+Once the relationship has been defined, we may retrieve the related models using Eloquent's dynamic properties:
+
+```typescript
+const country = await Country.find(1);
+
+const posts = await country.posts;
+
+for (const post of posts) {
+  console.log(post.title);
+}
+```
+
+### Custom Keys
+
+Typical foreign key conventions will be used when performing the relationship's queries. If you would like to customize the keys of the relationship, you may pass them as the third, fourth, and fifth arguments to the `hasManyThrough` method:
+
+```typescript
+posts() {
+  return this.hasManyThrough(
+    Post,
+    User,
+    'country_id', // Foreign key on the users table
+    'user_id',    // Foreign key on the posts table
+    'id',         // Local key on the countries table
+    'id'          // Local key on the users table
+  );
+}
+```
+
+## Polymorphic Relationships
+
+### Introduction
+
+A polymorphic relationship allows the child model to belong to more than one type of model using a single association. For example, imagine you are building an application that allows users to share blog posts and videos. In such an application, a `Comment` model might belong to both the `Post` and `Video` models.
+
+### One To One (Polymorphic)
+
+#### Table Structure
+
+A one-to-one polymorphic relation is similar to a typical one-to-one relation; however, the child model can belong to more than one type of model using a single association. For example, a blog `Post` and a `User` may share a polymorphic relation to an `Image` model. Using a one-to-one polymorphic relation allows you to have a single table of unique images that may be associated with posts and users. First, let's examine the table structure:
+
+```
+posts
+  id - integer
+  name - string
+
+users
+  id - integer
+  name - string
+
+images
+  id - integer
+  url - string
+  imageable_id - integer
+  imageable_type - string
+```
+
+Note the `imageable_id` and `imageable_type` columns on the `images` table. The `imageable_id` column will contain the ID value of the post or user, while the `imageable_type` column will contain the class name of the parent model. The `imageable_type` column is used by Eloquent to determine which "type" of parent model to return when accessing the `imageable` relation.
+
+#### Model Structure
+
+Next, let's examine the model definitions needed to build this relationship:
+
+```typescript
+import { Model } from 'guruorm';
+import Image from './Image';
+
+class Post extends Model {
+  image() {
+    return this.morphOne(Image, 'imageable');
+  }
+}
+
+class User extends Model {
+  image() {
+    return this.morphOne(Image, 'imageable');
+  }
+}
+```
+
+#### Retrieving the Relationship
+
+Once your database table and models are defined, you may access the relationships via your models. For example, to retrieve the image for a post, we can access the `image` dynamic property:
+
+```typescript
+const post = await Post.find(1);
+
+const image = await post.image;
+
+console.log(image.url);
+```
+
+You may also retrieve the parent of the polymorphic model by accessing the name of the method that performs the call to `morphTo`. In this case, that is the `imageable` method on the `Image` model:
+
+```typescript
+import { Model } from 'guruorm';
+
+class Image extends Model {
+  imageable() {
+    return this.morphTo();
+  }
+}
+```
+
+The `morphTo` relationship will return either a `Post` or `User` instance, depending on which type of model owns the image.
+
+### One To Many (Polymorphic)
+
+#### Table Structure
+
+A one-to-many polymorphic relation is similar to a typical one-to-many relation; however, the child model can belong to more than one type of model using a single association. For example, imagine users of your application can "comment" on posts and videos. Using polymorphic relationships, you may use a single `comments` table for both of these scenarios. First, let's examine the table structure required to build this relationship:
+
+```
+posts
+  id - integer
+  title - string
+  body - text
+
+videos
+  id - integer
+  title - string
+  url - string
+
+comments
+  id - integer
+  body - text
+  commentable_id - integer
+  commentable_type - string
+```
+
+#### Model Structure
+
+Next, let's examine the model definitions needed to build this relationship:
+
+```typescript
+import { Model } from 'guruorm';
+import Comment from './Comment';
+
+class Post extends Model {
+  comments() {
+    return this.morphMany(Comment, 'commentable');
+  }
+}
+
+class Video extends Model {
+  comments() {
+    return this.morphMany(Comment, 'commentable');
+  }
+}
+```
+
+#### Retrieving the Relationship
+
+Once your database table and models are defined, you may access the relationships via your models. For example, to access all of the comments for a post, we can use the `comments` dynamic property:
+
+```typescript
+const post = await Post.find(1);
+
+const comments = await post.comments;
+
+for (const comment of comments) {
+  console.log(comment.body);
+}
+```
+
+You may also retrieve the owner of a polymorphic relation from the polymorphic child model by accessing the name of the method that performs the call to `morphTo`. In this case, that is the `commentable` method on the `Comment` model:
+
+```typescript
+import { Model } from 'guruorm';
+
+class Comment extends Model {
+  commentable() {
+    return this.morphTo();
+  }
+}
+
+const comment = await Comment.find(1);
+
+const commentable = await comment.commentable;
+```
+
+The `commentable` relation on the `Comment` model will return either a `Post` or `Video` instance, depending on which type of model owns the comment.
+
+### Custom Polymorphic Types
+
+By default, GuruORM will use the fully qualified class name to store the "type" of the related model. For instance, given the one-to-many relationship example above where a `Comment` may belong to a `Post` or a `Video`, the default `commentable_type` would be either `Post` or `Video` respectively.
+
+However, you may wish to decouple these values from your application's internal structure. In that case, you may define a "morph map" to instruct Eloquent to use a custom name for each model instead of the class name:
+
+```typescript
+import { Model } from 'guruorm';
+import Post from './Post';
+import Video from './Video';
+
+Model.morphMap({
+  post: Post,
+  video: Video,
+});
+```
+
+You may register the `morphMap` in your application's boot process. Now when Eloquent needs to store or retrieve the type, it will use `'post'` or `'video'` instead of the class names.
+
+## Querying Relations
+
+Since all Eloquent relationships are defined via methods, you may call those methods to obtain an instance of the relationship without actually executing a query to load the related models. In addition, all types of Eloquent relationships also serve as query builders, allowing you to continue to chain constraints onto the relationship query before finally executing the SQL query against your database.
+
+For example, imagine a blog application in which a `User` model has many associated `Post` models:
+
+```typescript
+import { Model } from 'guruorm';
+import Post from './Post';
+
+class User extends Model {
+  posts() {
+    return this.hasMany(Post);
+  }
+}
+```
+
+You may query the `posts` relationship and add additional constraints to the relationship like so:
+
+```typescript
+const user = await User.find(1);
+
+const posts = await user.posts().where('active', 1).get();
+```
+
+### Relationship Methods vs. Dynamic Properties
+
+If you do not need to add additional constraints to an Eloquent relationship query, you may access the relationship as if it were a property. For example, continuing to use our `User` and `Post` example models, we may access all of a user's posts like so:
+
+```typescript
+const user = await User.find(1);
+
+const posts = await user.posts;
+
+for (const post of posts) {
+  console.log(post.title);
+}
+```
+
+Dynamic relationship properties perform "lazy loading", meaning they will only load their relationship data when you actually access them. Because of this, developers often use eager loading to pre-load relationships they know will be accessed after loading the model. Eager loading provides a significant reduction in SQL queries that must be executed to load a model's relations.
+
 ## Touching Parent Timestamps
 
 When a model belongs to another model via a `belongsTo` or `belongsToMany` relationship, such as a `Comment` belonging to a `Post`, it is sometimes helpful to update the parent's timestamp when the child model is updated.

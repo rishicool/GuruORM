@@ -7,6 +7,9 @@ import { Events } from './Events';
  * Model base class - inspired by Laravel and Illuminate
  */
 export class Model {
+  // Model registry for morphTo relationships
+  protected static morphMap: Record<string, typeof Model> = {};
+  
   // Table configuration
   protected table?: string;
   protected primaryKey = 'id';
@@ -16,7 +19,15 @@ export class Model {
   protected dateFormat?: string;
   protected connection?: string;
 
-  // Mass assignment
+  // Mass assignment (static versions for subclasses to override)
+  protected static fillable?: string[];
+  protected static guarded?: string[];
+  protected static hidden?: string[];
+  protected static visible?: string[];
+  protected static appends?: string[];
+  protected static casts?: Record<string, string>;
+
+  // Mass assignment (instance properties as defaults)
   protected fillable: string[] = [];
   protected guarded: string[] = ['*'];
 
@@ -94,7 +105,8 @@ export class Model {
         const modelProperties = [
           'table', 'primaryKey', 'keyType', 'incrementing', 'timestamps', 'dateFormat', 'connection',
           'fillable', 'guarded', 'hidden', 'visible', 'appends', 'casts', 'dispatchesEvents',
-          'attributes', 'original', 'relations', 'exists', 'wasRecentlyCreated', 'touches', 'changes'
+          'attributes', 'original', 'relations', 'exists', 'wasRecentlyCreated', 'touches', 'changes',
+          'forceDeleting' // SoftDeletes internal property
         ];
         
         // If it's a model property, return it directly
@@ -127,7 +139,8 @@ export class Model {
         const modelProperties = [
           'table', 'primaryKey', 'keyType', 'incrementing', 'timestamps', 'dateFormat', 'connection',
           'fillable', 'guarded', 'hidden', 'visible', 'appends', 'casts', 'dispatchesEvents',
-          'attributes', 'original', 'relations', 'exists', 'wasRecentlyCreated', 'touches', 'changes'
+          'attributes', 'original', 'relations', 'exists', 'wasRecentlyCreated', 'touches', 'changes',
+          'forceDeleting' // SoftDeletes internal property
         ];
         
         // If it's a known model property or method, set it directly
@@ -158,7 +171,16 @@ export class Model {
    * Bootstrap the model
    */
   protected boot(): void {
-    // Can be overridden in child classes
+    // Auto-register model for morphTo relationships using class name
+    const constructor = this.constructor as typeof Model;
+    Model.morphMap[constructor.name] = constructor;
+  }
+
+  /**
+   * Get a model class by its morph alias
+   */
+  static getMorphedModel(alias: string): typeof Model | undefined {
+    return Model.morphMap[alias];
   }
 
   /**
@@ -187,17 +209,21 @@ export class Model {
    * Determine if the given attribute may be mass assigned
    */
   isFillable(key: string): boolean {
+    // Get fillable and guarded from static properties (preferred) or instance properties (fallback)
+    const fillable = (this.constructor as typeof Model).fillable ?? this.fillable;
+    const guarded = (this.constructor as typeof Model).guarded ?? this.guarded;
+    
     // If fillable is defined and not empty, check if key is in it
-    if (this.fillable.length > 0) {
-      return this.fillable.includes(key);
+    if (fillable.length > 0) {
+      return fillable.includes(key);
     }
 
     // Check if not guarded
-    if (this.guarded.includes('*')) {
+    if (guarded.includes('*')) {
       return false;
     }
 
-    return !this.guarded.includes(key);
+    return !guarded.includes(key);
   }
 
   /**
@@ -322,7 +348,8 @@ export class Model {
    * Determine whether an attribute should be cast
    */
   protected hasCast(key: string): boolean {
-    return this.casts[key] !== undefined;
+    const casts = (this.constructor as typeof Model).casts ?? this.casts;
+    return casts[key] !== undefined;
   }
 
   /**
@@ -333,7 +360,8 @@ export class Model {
       return value;
     }
 
-    const castType: any = this.casts[key];
+    const casts = (this.constructor as typeof Model).casts ?? this.casts;
+    const castType: any = casts[key];
     if (!castType) {
       return value;
     }
@@ -392,7 +420,8 @@ export class Model {
    * Cast an attribute for setting
    */
   protected castAttributeForSet(key: string, value: any): any {
-    const castType: any = this.casts[key];
+    const casts = (this.constructor as typeof Model).casts ?? this.casts;
+    const castType: any = casts[key];
     
     if (!castType) {
       return value;
@@ -561,6 +590,18 @@ export class Model {
     }
 
     return saved;
+  }
+
+  /**
+   * Update the model with the given attributes
+   */
+  async update(attributes: Record<string, any> = {}): Promise<boolean> {
+    if (!this.exists) {
+      return false;
+    }
+
+    this.fill(attributes);
+    return await this.save();
   }
 
   /**
@@ -881,7 +922,39 @@ export class Model {
     const builder = new EloquentBuilder(this.newBaseQueryBuilder());
     builder.setModel(this);
 
-    return builder;
+    // Wrap builder in Proxy to support dynamic scope methods
+    const proxy: any = new Proxy(builder, {
+      get(target: any, prop: string | symbol) {
+        // Return existing property/method
+        if (prop in target || typeof prop === 'symbol') {
+          const value = target[prop];
+          // If it's a method that returns 'this', wrap the return to preserve proxy
+          if (typeof value === 'function') {
+            return function(...args: any[]) {
+              const result = value.apply(target, args);
+              // If method returns the builder, return the proxy instead
+              return result === target ? proxy : result;
+            };
+          }
+          return value;
+        }
+
+        // Check if it's a scope method (e.g., active() -> scopeActive())
+        const scopeMethod = `scope${String(prop).charAt(0).toUpperCase() + String(prop).slice(1)}`;
+        const modelConstructor = target.getModel().constructor;
+        
+        if (typeof modelConstructor[scopeMethod] === 'function') {
+          return function(...args: any[]) {
+            modelConstructor[scopeMethod](target, ...args);
+            return proxy;
+          };
+        }
+
+        return target[prop];
+      }
+    });
+
+    return proxy;
   }
 
   /**
@@ -981,10 +1054,11 @@ export class Model {
       return visible;
     }
 
-    if (this.hidden.length > 0) {
+    const hidden = (this.constructor as typeof Model).hidden ?? this.hidden;
+    if (hidden.length > 0) {
       const filtered: Record<string, any> = {};
       for (const [key, value] of Object.entries(array)) {
-        if (!this.hidden.includes(key)) {
+        if (!hidden.includes(key)) {
           filtered[key] = value;
         }
       }

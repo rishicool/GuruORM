@@ -584,7 +584,15 @@ export class Grammar {
       .map((record) => `(${this.parameterize(Object.values(record))})`)
       .join(', ');
 
-    return `insert into ${table} (${columns}) values ${parameters}`;
+    let sql = `insert into ${table} (${columns}) values ${parameters}`;
+    
+    // Add RETURNING clause if specified
+    const returning = query['getReturning']();
+    if (returning && returning.length > 0) {
+      sql += ` returning ${this.columnize(returning)}`;
+    }
+    
+    return sql;
   }
 
   /**

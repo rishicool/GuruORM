@@ -49,8 +49,16 @@ export class BelongsToMany extends Relation {
     const baseTable = this.related.getTable();
     const key = `${baseTable}.${this.relatedKey}`;
 
-    // Join implementation would need to be added to Builder
-    // For now, this is a placeholder
+    // Join the pivot table to the related model's table
+    this.query.join(
+      this.table,
+      `${this.table}.${this.relatedPivotKey}`,
+      '=',
+      key
+    );
+    
+    // Select the related model's columns
+    this.query.select(`${baseTable}.*`);
   }
 
   /**

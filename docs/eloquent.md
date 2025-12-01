@@ -868,6 +868,339 @@ await user.forceDeleteQuietly();
 await user.restoreQuietly();
 ```
 
+## Attribute Casting
+
+### Introduction
+
+Attribute casting allows you to convert attributes to common data types. The `casts` property on your model provides a convenient method of converting attributes to their proper types. The `casts` property should be an object where the key is the name of the attribute being cast and the value is the type you wish to cast the column to.
+
+### Available Cast Types
+
+The supported cast types are:
+
+- `'integer'` / `'int'` - Cast to integer
+- `'real'` / `'float'` / `'double'` - Cast to float
+- `'decimal:2'` - Cast to decimal with precision
+- `'string'` - Cast to string
+- `'boolean'` / `'bool'` - Cast to boolean
+- `'object'` - Cast to object
+- `'array'` - Cast to array
+- `'collection'` - Cast to Collection instance
+- `'date'` - Cast to Date object
+- `'datetime'` - Cast to datetime
+- `'timestamp'` - Cast to Unix timestamp
+- `'json'` - Cast to/from JSON string
+
+### Defining Casts
+
+To define attribute casts, define a `casts` property on your model:
+
+```typescript
+import { Model } from 'guruorm';
+
+class User extends Model {
+  protected casts = {
+    email_verified_at: 'datetime',
+    is_admin: 'boolean',
+    options: 'json',
+    settings: 'object',
+    tags: 'array',
+    birthday: 'date',
+    score: 'float',
+    votes: 'integer',
+  };
+}
+```
+
+Now, the `is_admin` attribute will always be cast to a boolean when you access it:
+
+```typescript
+const user = await User.find(1);
+
+if (user.is_admin) {
+  // is_admin is now a boolean
+}
+```
+
+### Array & JSON Casting
+
+The `array` and `json` cast types are particularly useful when working with columns that store serialized data:
+
+```typescript
+class User extends Model {
+  protected casts = {
+    options: 'json',
+    permissions: 'array',
+  };
+}
+
+const user = await User.find(1);
+
+// Access as object
+console.log(user.options.theme);
+
+// Access as array
+console.log(user.permissions[0]);
+
+// Set as object/array
+user.options = { theme: 'dark', language: 'en' };
+user.permissions = ['read', 'write'];
+
+await user.save();
+```
+
+### Date Casting
+
+When casting attributes to `date` or `datetime`, you can access the value as a JavaScript Date object:
+
+```typescript
+class User extends Model {
+  protected casts = {
+    created_at: 'datetime',
+    birthday: 'date',
+  };
+}
+
+const user = await User.find(1);
+
+console.log(user.birthday.toISOString());
+console.log(user.created_at.getTime());
+```
+
+### Decimal Casting
+
+The `decimal` cast requires a precision parameter:
+
+```typescript
+class Product extends Model {
+  protected casts = {
+    price: 'decimal:2',
+    tax_rate: 'decimal:4',
+  };
+}
+```
+
+### Custom Casts
+
+You may define your own custom cast types by creating a class that implements the `CastsAttributes` interface:
+
+```typescript
+import { CastsAttributes } from 'guruorm';
+
+class UpperCaseCast implements CastsAttributes {
+  get(model: any, key: string, value: any, attributes: any): any {
+    return value ? value.toUpperCase() : value;
+  }
+
+  set(model: any, key: string, value: any, attributes: any): any {
+    return value ? value.toUpperCase() : value;
+  }
+}
+```
+
+Then use it in your model:
+
+```typescript
+import { Model } from 'guruorm';
+import UpperCaseCast from './casts/UpperCaseCast';
+
+class User extends Model {
+  protected casts = {
+    name: UpperCaseCast,
+  };
+}
+```
+
+## Hiding Attributes From JSON
+
+### Introduction
+
+Sometimes you may wish to limit the attributes that are included in your model's array or JSON representation, such as passwords or secret keys. To do so, add a `hidden` property to your model:
+
+```typescript
+import { Model } from 'guruorm';
+
+class User extends Model {
+  protected hidden = ['password', 'remember_token'];
+}
+```
+
+Now when you convert the model to an array or JSON, the hidden attributes will not be included:
+
+```typescript
+const user = await User.find(1);
+
+const array = user.toArray();
+// password and remember_token are not included
+
+const json = user.toJSON();
+// password and remember_token are not included
+```
+
+### Temporarily Revealing Hidden Attributes
+
+If you would like to make a typically hidden attribute visible on a given model instance, you may use the `makeVisible()` method:
+
+```typescript
+const user = await User.find(1);
+
+user.makeVisible('password');
+
+const array = user.toArray();
+// password is now included
+```
+
+You may also make multiple attributes visible:
+
+```typescript
+user.makeVisible(['password', 'remember_token']);
+```
+
+### Temporarily Hiding Visible Attributes
+
+Conversely, if you would like to hide an attribute that is typically visible, you may use the `makeHidden()` method:
+
+```typescript
+const user = await User.find(1);
+
+user.makeHidden(['email', 'phone']);
+
+const array = user.toArray();
+// email and phone are now hidden
+```
+
+### Whitelisting Visible Attributes
+
+Alternatively, you may define a `visible` property to define an "allow list" of attributes that should be included in your model's array and JSON representation. All attributes not present in the `visible` array will be hidden:
+
+```typescript
+import { Model } from 'guruorm';
+
+class User extends Model {
+  protected visible = ['id', 'name', 'email'];
+}
+```
+
+## Appending Values to JSON
+
+### Introduction
+
+Occasionally, you may need to add attributes to your model's array or JSON representation that do not have a corresponding column in your database. To do so, first define an accessor for the value:
+
+```typescript
+import { Model } from 'guruorm';
+
+class User extends Model {
+  getFullNameAttribute(): string {
+    return `${this.first_name} ${this.last_name}`;
+  }
+}
+```
+
+Then add the attribute name to the `appends` property:
+
+```typescript
+class User extends Model {
+  protected appends = ['full_name'];
+  
+  getFullNameAttribute(): string {
+    return `${this.first_name} ${this.last_name}`;
+  }
+}
+```
+
+Now the `full_name` attribute will be included when the model is converted to an array or JSON:
+
+```typescript
+const user = await User.find(1);
+
+const array = user.toArray();
+console.log(array.full_name); // "John Doe"
+```
+
+## Model Replication
+
+You may create an un-saved copy of an existing model instance using the `replicate()` method. This method is particularly useful when you have model instances that share many of the same attributes:
+
+```typescript
+const shipping = await Address.create({
+  type: 'shipping',
+  line_1: '123 Example Street',
+  city: 'Victorville',
+  state: 'CA',
+  postcode: '90001',
+});
+
+const billing = shipping.replicate();
+
+billing.fill({ type: 'billing' });
+
+await billing.save();
+```
+
+To exclude one or more attributes from being replicated, you may pass an array to the `replicate()` method:
+
+```typescript
+const billing = shipping.replicate(['type']);
+```
+
+## Fresh Models & Refresh
+
+### The `fresh` Method
+
+If you already have an instance of an Eloquent model that was retrieved from the database, you can "refresh" the model using the `fresh()` method. The `fresh()` method will re-retrieve the model from the database. The existing model instance will not be affected:
+
+```typescript
+const user = await User.where('name', 'John').first();
+
+const freshUser = await user.fresh();
+```
+
+### The `refresh` Method
+
+The `refresh()` method will re-hydrate the existing model using fresh data from the database. In addition, all of its loaded relationships will be refreshed as well:
+
+```typescript
+const user = await User.where('name', 'John').first();
+
+user.name = 'Jack';
+
+await user.refresh();
+
+console.log(user.name); // Still "John" - refreshed from database
+```
+
+## Pagination in Eloquent
+
+All pagination methods available on the query builder are also available on Eloquent models:
+
+```typescript
+// Standard pagination
+const users = await User.where('active', true).paginate(15, 1);
+
+// Simple pagination
+const users = await User.orderBy('created_at').simplePaginate(20);
+
+// Cursor pagination
+const users = await User.cursorPaginate(10);
+```
+
+For more information on pagination, see the [Query Builder documentation](./query-builder.md#pagination).
+
+## Comparing Models
+
+Sometimes you may need to determine if two models are the "same" or not. The `is()` and `isNot()` methods may be used to quickly verify two models have the same primary key, table, and database connection or not:
+
+```typescript
+if (post.is(anotherPost)) {
+  // Same model
+}
+
+if (post.isNot(anotherPost)) {
+  // Different models
+}
+```
+
 ## Next Steps
 
 Now that you've learned the basics of Eloquent ORM, you're ready to dive deeper:

@@ -106,4 +106,25 @@ export abstract class Relation {
     (this.query as any).offset(value);
     return this;
   }
+
+  /**
+   * Get the count of the relationship results
+   */
+  async count(): Promise<number> {
+    return this.query.count();
+  }
+
+  /**
+   * Make the relation thenable so it can be awaited directly
+   */
+  then(onfulfilled?: any, onrejected?: any): Promise<any> {
+    return this.getResults().then(onfulfilled, onrejected);
+  }
+
+  /**
+   * Make the relation catchable
+   */
+  catch(onrejected?: any): Promise<any> {
+    return this.getResults().catch(onrejected);
+  }
 }

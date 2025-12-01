@@ -27,6 +27,7 @@ export class Builder {
   protected unions: any[] = [];
   protected lock: boolean | string = false;
   protected columnAliases: Map<string, string> = new Map(); // Track column aliases
+  protected returningColumns: string[] = []; // For RETURNING clause
   
   // Bindings for prepared statements
   protected bindings: {
@@ -250,6 +251,15 @@ export class Builder {
       operator = '=';
     }
 
+    // Handle null values - convert to IS NULL or IS NOT NULL
+    if (value === null) {
+      if (operator === '=' || operator === '==') {
+        return boolean === 'and' ? this.whereNull(column) : this.orWhereNull(column);
+      } else if (operator === '!=' || operator === '<>') {
+        return boolean === 'and' ? this.whereNotNull(column) : this.orWhereNotNull(column);
+      }
+    }
+
     this.wheres.push({
       type: 'Basic',
       column,
@@ -310,6 +320,17 @@ export class Builder {
    * Add a "where in" clause to the query
    */
   whereIn(column: string, values: any[], boolean: 'and' | 'or' = 'and', not = false): this {
+    // Handle empty array - should return no results (or all results if NOT IN)
+    if (Array.isArray(values) && values.length === 0) {
+      if (not) {
+        // whereNotIn with empty array should match everything - do nothing
+        return this;
+      } else {
+        // whereIn with empty array should match nothing - add impossible condition
+        return this.whereRaw('1 = 0');
+      }
+    }
+
     const type = not ? 'NotIn' : 'In';
 
     this.wheres.push({
@@ -1255,7 +1276,22 @@ export class Builder {
   /**
    * Insert new records into the database
    */
-  async insert(values: any[] | any): Promise<boolean> {
+  /**
+   * Set the columns to be returned from an insert/update/delete
+   */
+  returning(columns: string | string[]): this {
+    this.returningColumns = Array.isArray(columns) ? columns : [columns];
+    return this;
+  }
+
+  /**
+   * Get the returning columns
+   */
+  getReturning(): string[] {
+    return this.returningColumns;
+  }
+
+  async insert(values: any[] | any): Promise<boolean | any[]> {
     if (Array.isArray(values) && values.length === 0) {
       return true;
     }
@@ -1266,6 +1302,11 @@ export class Builder {
     
     const sql = this.grammar.compileInsert(this, valuesArray);
     const bindings = this.grammar.prepareBindingsForInsert(this.bindings, valuesArray);
+
+    // If RETURNING clause is specified, use select to get results
+    if (this.returningColumns.length > 0) {
+      return this.connection.select(sql, bindings);
+    }
 
     return this.connection.insert(sql, bindings);
   }
@@ -1383,7 +1424,9 @@ export class Builder {
     }
 
     // Insert new record
-    return this.insert({ ...attributes, ...values });
+    const insertValues = { ...attributes, ...values };
+    const result = await this.insert(insertValues);
+    return Array.isArray(result) ? result.length > 0 : !!result;
   }
 
   /**

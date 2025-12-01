@@ -43,21 +43,32 @@ export class PostgresConnection extends Connection {
   }
 
   /**
+   * Convert ? placeholders to PostgreSQL $1, $2, etc format
+   */
+  protected convertBindings(query: string): string {
+    let index = 0;
+    return query.replace(/\?/g, () => `$${++index}`);
+  }
+
+  /**
    * Run a select statement against the database
    */
   async select(query: string, bindings: any[] = [], useReadPdo = true): Promise<any[]> {
     const startTime = Date.now();
     
+    // Convert ? to $1, $2, etc for PostgreSQL
+    const pgQuery = this.convertBindings(query);
+    
     try {
       const connection = useReadPdo ? this.getReadClient() : this.getClient();
-      const result = await connection.query(query, bindings);
+      const result = await connection.query(pgQuery, bindings);
       
       const time = Date.now() - startTime;
-      this.logQuery(query, bindings, time);
+      this.logQuery(pgQuery, bindings, time);
       
       return result.rows;
     } catch (error) {
-      throw this.handleQueryException(error as Error, query, bindings);
+      throw this.handleQueryException(error as Error, pgQuery, bindings);
     }
   }
 
@@ -88,15 +99,18 @@ export class PostgresConnection extends Connection {
   async statement(query: string, bindings: any[] = []): Promise<boolean> {
     const startTime = Date.now();
     
+    // Convert ? to $1, $2, etc for PostgreSQL
+    const pgQuery = this.convertBindings(query);
+    
     try {
-      await this.getClient().query(query, bindings);
+      await this.getClient().query(pgQuery, bindings);
       
       const time = Date.now() - startTime;
-      this.logQuery(query, bindings, time);
+      this.logQuery(pgQuery, bindings, time);
       
       return true;
     } catch (error) {
-      throw this.handleQueryException(error as Error, query, bindings);
+      throw this.handleQueryException(error as Error, pgQuery, bindings);
     }
   }
 
@@ -106,15 +120,18 @@ export class PostgresConnection extends Connection {
   async affectingStatement(query: string, bindings: any[] = []): Promise<number> {
     const startTime = Date.now();
     
+    // Convert ? to $1, $2, etc for PostgreSQL
+    const pgQuery = this.convertBindings(query);
+    
     try {
-      const result = await this.getClient().query(query, bindings);
+      const result = await this.getClient().query(pgQuery, bindings);
       
       const time = Date.now() - startTime;
-      this.logQuery(query, bindings, time);
+      this.logQuery(pgQuery, bindings, time);
       
       return result.rowCount || 0;
     } catch (error) {
-      throw this.handleQueryException(error as Error, query, bindings);
+      throw this.handleQueryException(error as Error, pgQuery, bindings);
     }
   }
 

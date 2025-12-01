@@ -83,9 +83,17 @@ export class MorphTo extends Relation {
       return null;
     }
 
-    // Would need model registry to resolve type to class
-    // This is a simplified version
-    return null;
+    // Get the model class from the morph map
+    const { Model: BaseModel } = require('../Model');
+    const modelClass = BaseModel.getMorphedModel(morphType);
+    
+    if (!modelClass) {
+      throw new Error(`Model class not found for morph type: ${morphType}`);
+    }
+
+    // Query the related model
+    const instance = new modelClass();
+    return await instance.newQuery().find(morphId);
   }
 
   /**
