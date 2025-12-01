@@ -266,6 +266,11 @@ export class Grammar {
    * Wrap a default value
    */
   protected wrapDefaultValue(value: any): string {
+    // Handle raw SQL values
+    if (typeof value === 'object' && value !== null && '__raw' in value) {
+      return value.__raw;
+    }
+    
     if (typeof value === 'string') {
       return `'${value.replace(/'/g, "''")}'`;
     }
