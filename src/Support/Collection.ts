@@ -396,17 +396,18 @@ export class Collection<T = any> extends Array<T> {
   }
 
   /**
-   * Convert the collection to a plain array
+   * Convert the collection to an array
    */
   toArray(): T[] {
     return [...this];
   }
 
   /**
-   * Convert the collection to JSON
+   * Convert the collection to an array for JSON serialization
+   * This method is called by JSON.stringify() automatically
    */
-  toJSON(): string {
-    return JSON.stringify(this.toArray());
+  toJSON(): T[] {
+    return this.toArray();
   }
 
   /**

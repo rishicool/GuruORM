@@ -1094,16 +1094,17 @@ export class Model {
   }
 
   /**
-   * Convert the model instance to JSON
+   * Convert the model instance to a plain object for JSON serialization
+   * This method is called by JSON.stringify() automatically
    */
-  toJSON(): string {
-    return JSON.stringify(this.toArray());
+  toJSON(): Record<string, any> {
+    return this.toArray();
   }
 
   /**
-   * Convert the model instance to JSON (alias for toJSON)
+   * Convert the model instance to a plain object (alias for toJSON)
    */
-  toJson(): string {
+  toJson(): Record<string, any> {
     return this.toJSON();
   }
 

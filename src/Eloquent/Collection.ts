@@ -49,16 +49,23 @@ export class Collection<T = any> extends Array<T> {
 
   /**
    * Get the collection as a plain array
+   * Models are converted to plain objects
    */
-  toArray(): T[] {
-    return [...this];
+  toArray(): any[] {
+    return this.map((item: any) => {
+      if (item && typeof item.toArray === 'function') {
+        return item.toArray();
+      }
+      return item;
+    });
   }
 
   /**
-   * Get the collection as JSON
+   * Get the collection as an array for JSON serialization
+   * This method is called by JSON.stringify() automatically
    */
-  toJSON(): string {
-    return JSON.stringify(this.toArray());
+  toJSON(): any[] {
+    return this.toArray();
   }
 
   /**
