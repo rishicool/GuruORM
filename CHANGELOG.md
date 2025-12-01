@@ -2,6 +2,65 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.16.0] - 2025-12-01
+
+### Added
+- **String-Based Relations Support** 🎉
+  - Relations now accept both class constructors AND string names
+  - `belongsTo('Brand')` works alongside `belongsTo(Brand)`
+  - `hasMany('Product')` works alongside `hasMany(Product)`
+  - `belongsToMany('Permission')` works alongside `belongsToMany(Permission)`
+  - `hasOneThrough('Comment', 'Post')` works alongside `hasOneThrough(Comment, Post)`
+  - `hasManyThrough('Comment', 'Post')` works alongside `hasManyThrough(Comment, Post)`
+  
+- **Global Model Registry**
+  - Automatic model registration on first instantiation
+  - `Model.register(name, ModelClass)` for manual registration
+  - `Model.getModel(name)` to retrieve registered models
+  - Built-in `resolveModel()` handles both strings and classes
+  
+- **Benefits**
+  - ✅ Eliminates circular import issues
+  - ✅ Reduces boilerplate import statements
+  - ✅ Enables lazy loading of models
+  - ✅ Smaller bundle sizes for large projects
+  - ✅ More Laravel-like developer experience
+  - ✅ Backward compatible - existing code works unchanged
+  
+- **Usage Examples**
+  ```typescript
+  // Option 1: Class-based (type-safe, autocomplete)
+  import Brand from './Brand';
+  brand() { return this.belongsTo(Brand, 'brand_id'); }
+  
+  // Option 2: String-based (flexible, no imports)
+  brand() { return this.belongsTo('Brand', 'brand_id'); }
+  
+  // Option 3: Hybrid (mix both approaches)
+  import Unit from './Unit';
+  brand() { return this.belongsTo('Brand'); }     // String
+  unit() { return this.belongsTo(Unit); }         // Class
+  ```
+
+### Changed
+- Enhanced relation method signatures to accept `typeof Model | string`
+- Updated `boot()` to auto-register models in `modelRegistry`
+- Improved error messages for unregistered models
+
+### Technical Details
+- Added `protected static modelRegistry` for string lookups
+- Added `Model.register()` and `Model.getModel()` static methods  
+- Added `protected resolveModel()` helper for string/class resolution
+- Modified all relation methods: `belongsTo`, `hasMany`, `hasOne`, `belongsToMany`, `hasOneThrough`, `hasManyThrough`
+- Zero breaking changes - fully backward compatible
+
+### Migration Guide
+- **No migration needed!** Existing class-based relations continue to work
+- **Optional:** Refactor to strings for better flexibility
+- **Recommended:** Use hybrid approach (classes for core models, strings for edges)
+
+---
+
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 

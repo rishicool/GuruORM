@@ -10,6 +10,9 @@ export class Model {
   // Model registry for morphTo relationships
   protected static morphMap: Record<string, typeof Model> = {};
   
+  // Global model registry for string-based relations
+  protected static modelRegistry: Record<string, typeof Model> = {};
+  
   // Table configuration
   protected table?: string;
   protected primaryKey = 'id';
@@ -174,6 +177,9 @@ export class Model {
     // Auto-register model for morphTo relationships using class name
     const constructor = this.constructor as typeof Model;
     Model.morphMap[constructor.name] = constructor;
+    
+    // Auto-register for string-based relations
+    Model.modelRegistry[constructor.name] = constructor;
   }
 
   /**
@@ -181,6 +187,38 @@ export class Model {
    */
   static getMorphedModel(alias: string): typeof Model | undefined {
     return Model.morphMap[alias];
+  }
+
+  /**
+   * Register a model class for string-based relations
+   */
+  static register(name: string, modelClass: typeof Model): void {
+    Model.modelRegistry[name] = modelClass;
+  }
+
+  /**
+   * Get a registered model class by name
+   */
+  static getModel(name: string): typeof Model | undefined {
+    return Model.modelRegistry[name];
+  }
+
+  /**
+   * Resolve model from string or class constructor
+   */
+  protected resolveModel(related: typeof Model | string): typeof Model {
+    if (typeof related === 'string') {
+      const modelClass = Model.getModel(related);
+      if (!modelClass) {
+        throw new Error(
+          `Model "${related}" not found in registry. \n` +
+          `Make sure the model has been imported and instantiated at least once, \n` +
+          `or register it manually: Model.register('${related}', ${related})`
+        );
+      }
+      return modelClass;
+    }
+    return related;
   }
 
   /**
@@ -1696,9 +1734,10 @@ export class Model {
   /**
    * Define a one-to-one relationship
    */
-  hasOne(related: typeof Model, foreignKey?: string, localKey?: string): any {
+  hasOne(related: typeof Model | string, foreignKey?: string, localKey?: string): any {
     const { HasOne } = require('./Relations/HasOne');
-    const instance = new related();
+    const relatedClass = this.resolveModel(related);
+    const instance = new relatedClass();
     
     foreignKey = foreignKey || this.getForeignKey();
     localKey = localKey || this.getKeyName();
@@ -1709,9 +1748,10 @@ export class Model {
   /**
    * Define a one-to-many relationship
    */
-  hasMany(related: typeof Model, foreignKey?: string, localKey?: string): any {
+  hasMany(related: typeof Model | string, foreignKey?: string, localKey?: string): any {
     const { HasMany } = require('./Relations/HasMany');
-    const instance = new related();
+    const relatedClass = this.resolveModel(related);
+    const instance = new relatedClass();
     
     foreignKey = foreignKey || this.getForeignKey();
     localKey = localKey || this.getKeyName();
@@ -1722,9 +1762,10 @@ export class Model {
   /**
    * Define an inverse one-to-one or many relationship
    */
-  belongsTo(related: typeof Model, foreignKey?: string, ownerKey?: string): any {
+  belongsTo(related: typeof Model | string, foreignKey?: string, ownerKey?: string): any {
     const { BelongsTo } = require('./Relations/BelongsTo');
-    const instance = new related();
+    const relatedClass = this.resolveModel(related);
+    const instance = new relatedClass();
     
     foreignKey = foreignKey || this.snake(instance.constructor.name) + '_id';
     ownerKey = ownerKey || instance.getKeyName();
@@ -1736,7 +1777,7 @@ export class Model {
    * Define a many-to-many relationship
    */
   belongsToMany(
-    related: typeof Model,
+    related: typeof Model | string,
     table?: string,
     foreignPivotKey?: string,
     relatedPivotKey?: string,
@@ -1744,11 +1785,12 @@ export class Model {
     relatedKey?: string
   ): any {
     const { BelongsToMany } = require('./Relations/BelongsToMany');
-    const instance = new related();
+    const relatedClass = this.resolveModel(related);
+    const instance = new relatedClass();
     
     foreignPivotKey = foreignPivotKey || this.getForeignKey();
     relatedPivotKey = relatedPivotKey || instance.getForeignKey();
-    table = table || this.joiningTable(related);
+    table = table || this.joiningTable(relatedClass);
     parentKey = parentKey || this.getKeyName();
     relatedKey = relatedKey || instance.getKeyName();
 
@@ -1774,8 +1816,8 @@ export class Model {
    * Define a has-one-through relationship
    */
   hasOneThrough(
-    related: typeof Model,
-    through: typeof Model,
+    related: typeof Model | string,
+    through: typeof Model | string,
     firstKey?: string,
     secondKey?: string,
     localKey?: string,
@@ -1783,16 +1825,19 @@ export class Model {
   ): any {
     const { HasOneThrough } = require('./Relations/HasOneThrough');
     
+    const relatedClass = this.resolveModel(related);
+    const throughClass = this.resolveModel(through);
+    
     firstKey = firstKey || this.getForeignKey();
-    secondKey = secondKey || new through().getForeignKey();
+    secondKey = secondKey || new throughClass().getForeignKey();
     localKey = localKey || this.primaryKey;
-    secondLocalKey = secondLocalKey || new through().primaryKey;
+    secondLocalKey = secondLocalKey || new throughClass().primaryKey;
 
-    const instance = new related();
+    const instance = new relatedClass();
     return new HasOneThrough(
       instance.newQuery(),
       this,
-      through,
+      throughClass,
       firstKey,
       secondKey,
       localKey,
@@ -1804,8 +1849,8 @@ export class Model {
    * Define a has-many-through relationship
    */
   hasManyThrough(
-    related: typeof Model,
-    through: typeof Model,
+    related: typeof Model | string,
+    through: typeof Model | string,
     firstKey?: string,
     secondKey?: string,
     localKey?: string,
@@ -1813,16 +1858,19 @@ export class Model {
   ): any {
     const { HasManyThrough } = require('./Relations/HasManyThrough');
     
+    const relatedClass = this.resolveModel(related);
+    const throughClass = this.resolveModel(through);
+    
     firstKey = firstKey || this.getForeignKey();
-    secondKey = secondKey || new through().getForeignKey();
+    secondKey = secondKey || new throughClass().getForeignKey();
     localKey = localKey || this.primaryKey;
-    secondLocalKey = secondLocalKey || new through().primaryKey;
+    secondLocalKey = secondLocalKey || new throughClass().primaryKey;
 
-    const instance = new related();
+    const instance = new relatedClass();
     return new HasManyThrough(
       instance.newQuery(),
       this,
-      through,
+      throughClass,
       firstKey,
       secondKey,
       localKey,
