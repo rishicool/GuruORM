@@ -1,5 +1,6 @@
 import { Connection } from '../Connection/Connection';
 import { Migration } from './Migration';
+import { UniversalLoader } from '../Support/UniversalLoader';
 import { 
   dispatchMigrationsStarted, 
   dispatchMigrationsEnded, 

@@ -112,3 +112,5 @@ const Schema = {
 };
 
 export { Schema };
+
+export { UniversalLoader } from './Support/UniversalLoader';

@@ -1,24 +1,26 @@
-import { DB } from '../src';
+import { DB } from 'guruorm';
 
-export default class DatabaseSeeder {
+export default class {{class}} {
   async run() {
-    // Using raw SQL queries
-    await DB.insert('INSERT INTO users (name, email) VALUES (?, ?)', [
-      'Admin User',
-      'admin@example.com'
-    ]);
+    // Example: Insert data using query builder
+    // await DB.table('users').insert({
+    //   name: 'Test User',
+    //   email: 'test@example.com'
+    // });
 
-    // Or using query builder
-    await DB.table('users').insert({
-      name: 'Test User',
-      email: 'test@example.com'
-    });
+    // Example: Using raw SQL
+    // await DB.insert('INSERT INTO users (name, email) VALUES (?, ?)', [
+    //   'Admin User',
+    //   'admin@example.com'
+    // ]);
 
-    // Or using Eloquent models (if you have them)
-    // const User = require('../models/User').default;
+    // Example: Using Eloquent Model
+    // import { User } from '../models/User.js';
     // await User.create({
     //   name: 'Admin',
     //   email: 'admin@example.com',
     // });
+    
+    console.log('Seeded {{class}}');
   }
 }
