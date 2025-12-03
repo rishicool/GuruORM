@@ -1,10 +1,9 @@
-const { Schema } = require('guruorm');
+import { Schema } from 'guruorm';
 
-class {{class}} {
+export default class {{class}} {
   async up() {
     await Schema.create('{{table}}', (table) => {
       table.id();
-      table.string('name');
       table.timestamps();
     });
   }
@@ -13,5 +12,3 @@ class {{class}} {
     await Schema.dropIfExists('{{table}}');
   }
 }
-
-module.exports = {{class}};
