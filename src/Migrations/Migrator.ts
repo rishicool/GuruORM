@@ -240,44 +240,80 @@ export class Migrator {
    * Load a migration file and return migration instance
    */
   protected async loadMigration(file: MigrationFile): Promise<Migration> {
-    // Support both ESM and CJS
     let migrationModule;
+    
+    // Try to load the migration file - support both ESM and CJS
     try {
-      // Try dynamic import for ESM (file:// protocol required for absolute paths)
-      const fileUrl = file.path.startsWith('/') ? `file://${file.path}` : file.path;
-      migrationModule = await import(fileUrl);
-    } catch (error) {
-      // Fallback to require for CJS
+      // First, try require for CJS files
+      if (require.cache[file.path]) {
+        delete require.cache[file.path];
+      }
+      
       try {
         migrationModule = require(file.path);
-      } catch (reqError) {
-        throw new Error(`Failed to load migration ${file.name}: ${error}`);
+      } catch (requireError: any) {
+        // If require fails, try dynamic import for ESM
+        // Convert absolute path to file:// URL for ESM import
+        const fileUrl = new URL(file.path, 'file://').href;
+        
+        try {
+          migrationModule = await import(fileUrl);
+        } catch (importError: any) {
+          // If both fail, throw detailed error
+          throw new Error(
+            `Failed to load migration ${file.name}:\n` +
+            `  CJS Error: ${requireError.message}\n` +
+            `  ESM Error: ${importError.message}`
+          );
+        }
       }
+    } catch (error: any) {
+      throw new Error(`Failed to load migration ${file.name}: ${error.message}`);
     }
     
-    // Support multiple export formats:
+    // Support multiple export formats
     // 1. ESM default export: export default class
-    // 2. ESM named function exports: export async function up/down
-    // 3. CommonJS: module.exports = class
+    // 2. ESM function exports: export async function up/down
+    // 3. CommonJS class: module.exports = class
     // 4. Named exports: export class Migration
     
     if (migrationModule.default) {
       // ESM default export or CJS with default wrapper
       const MigrationClass = migrationModule.default;
-      return new (MigrationClass as any)();
+      
+      if (typeof MigrationClass === 'function') {
+        // It's a class constructor
+        return new (MigrationClass as any)();
+      } else if (MigrationClass.up && MigrationClass.down) {
+        // It's already an object with up/down methods
+        return MigrationClass as Migration;
+      } else {
+        throw new Error(`Invalid migration format in ${file.name}: default export must be a class or object with up/down methods`);
+      }
     } else if (migrationModule.up && migrationModule.down) {
-      // ESM function exports - return as Migration-compatible object
+      // ESM function exports - wrap them
       return {
-        up: () => migrationModule.up(),
-        down: () => migrationModule.down()
+        up: async () => await migrationModule.up(),
+        down: async () => await migrationModule.down()
       } as Migration;
     } else if (typeof migrationModule === 'function') {
-      // Direct function export (CJS)
+      // Direct function export (CJS: module.exports = ClassName)
       return new (migrationModule as any)();
     } else {
-      // Named export or object with exports
-      const MigrationClass = Object.values(migrationModule)[0];
-      return new (MigrationClass as any)();
+      // Try to find a class in named exports
+      const exportedValues = Object.values(migrationModule);
+      const MigrationClass = exportedValues.find(val => typeof val === 'function');
+      
+      if (MigrationClass) {
+        return new (MigrationClass as any)();
+      }
+      
+      throw new Error(
+        `Invalid migration format in ${file.name}. Expected:\n` +
+        `  - CJS: module.exports = class { up() {} down() {} }\n` +
+        `  - ESM: export default class { up() {} down() {} }\n` +
+        `  - ESM: export async function up() {} export async function down() {}`
+      );
     }
   }
   /**
