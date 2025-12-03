@@ -560,8 +560,6 @@ export class Builder {
   orWhereNotNull(...args: any[]): this { return this.proxyToQueryBuilder('orWhereNotNull', args); }
   whereColumn(...args: any[]): this { return this.proxyToQueryBuilder('whereColumn', args); }
   orWhereColumn(...args: any[]): this { return this.proxyToQueryBuilder('orWhereColumn', args); }
-  whereRaw(...args: any[]): this { return this.proxyToQueryBuilder('whereRaw', args); }
-  orWhereRaw(...args: any[]): this { return this.proxyToQueryBuilder('orWhereRaw', args); }
   whereExists(...args: any[]): this { return this.proxyToQueryBuilder('whereExists', args); }
   whereNotExists(...args: any[]): this { return this.proxyToQueryBuilder('whereNotExists', args); }
   orWhereExists(...args: any[]): this { return this.proxyToQueryBuilder('orWhereExists', args); }
@@ -587,7 +585,6 @@ export class Builder {
   crossJoin(...args: any[]): this { return this.proxyToQueryBuilder('crossJoin', args); }
   orderBy(...args: any[]): this { return this.proxyToQueryBuilder('orderBy', args); }
   orderByDesc(...args: any[]): this { return this.proxyToQueryBuilder('orderByDesc', args); }
-  orderByRaw(...args: any[]): this { return this.proxyToQueryBuilder('orderByRaw', args); }
   latest(...args: any[]): this { return this.proxyToQueryBuilder('latest', args); }
   oldest(...args: any[]): this { return this.proxyToQueryBuilder('oldest', args); }
   inRandomOrder(...args: any[]): this { return this.proxyToQueryBuilder('inRandomOrder', args); }

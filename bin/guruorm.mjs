@@ -9,6 +9,7 @@ import { MigrationMaker } from '../dist/CLI/MigrationMaker.js';
 import { SeederMaker } from '../dist/CLI/SeederMaker.js';
 import { FactoryMaker } from '../dist/CLI/FactoryMaker.js';
 import { MigrationRunner } from '../dist/CLI/MigrationRunner.js';
+import { SeederRunner } from '../dist/CLI/SeederRunner.js';
 import * as path from 'path';
 import { fileURLToPath } from 'url';
 
@@ -181,38 +182,54 @@ program
   .option('--force', 'Force the operation to run in production')
   .action(async (options) => {
     try {
-      console.log(`🌱 Seeding database with ${options.class}...`);
-      console.log('');
-      
-      // Dynamically import the seeder
-      const seederPath = path.join(process.cwd(), 'database', 'seeders', `${options.class}.js`);
-      
-      try {
-        const { default: SeederClass } = await import(seederPath);
-        const seeder = new SeederClass();
-        
-        if (typeof seeder.run !== 'function') {
-          throw new Error(`Seeder ${options.class} must have a run() method`);
-        }
-        
-        await seeder.run();
-        console.log('');
-        console.log(`✅ Database seeding completed successfully!`);
-      } catch (error) {
-        if (error.code === 'MODULE_NOT_FOUND' || error.code === 'ERR_MODULE_NOT_FOUND') {
-          console.error(`❌ Seeder not found: ${options.class}`);
-          console.log(`   Expected: ${seederPath}`);
-          console.log('');
-          console.log('   Create it with: guruorm make:seeder ' + options.class);
-        } else {
-          throw error;
-        }
-      }
+      const runner = new SeederRunner();
+      await runner.run(options);
+      await runner.disconnect();
     } catch (error) {
       console.error('❌ Error seeding database:', error.message);
       if (error.stack) {
         console.error(error.stack);
       }
+      process.exit(1);
+    }
+  });
+
+program
+  .command('db:seed:refresh')
+  .alias('db:refresh')
+  .description('Truncate all tables and re-run seeders')
+  .option('--class <class>', 'The seeder class to run', 'DatabaseSeeder')
+  .option('--force', 'Force the operation to run in production')
+  .action(async (options) => {
+    try {
+      if (!options.force && process.env.NODE_ENV === 'production') {
+        console.error('❌ Use --force to refresh database in production');
+        process.exit(1);
+      }
+      
+      const runner = new SeederRunner();
+      await runner.refresh(options);
+      await runner.disconnect();
+    } catch (error) {
+      console.error('❌ Error refreshing database:', error.message);
+      if (error.stack) {
+        console.error(error.stack);
+      }
+      process.exit(1);
+    }
+  });
+
+program
+  .command('db:clear')
+  .description('Clear all data from all tables (preserves structure)')
+  .option('--force', 'Force the operation to run in production')
+  .action(async (options) => {
+    try {
+      const runner = new SeederRunner();
+      await runner.clear(options);
+      await runner.disconnect();
+    } catch (error) {
+      console.error('❌ Error clearing database:', error.message);
       process.exit(1);
     }
   });

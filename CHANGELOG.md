@@ -2,6 +2,57 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.17.3] - 2025-12-03
+
+### Added
+- **Database Seeding Refresh Commands** 🌱
+  - `guruorm db:seed:refresh` - Truncate all tables and re-run seeders (like Laravel)
+  - `guruorm db:refresh` - Alias for db:seed:refresh
+  - `guruorm db:clear` - Clear all data from tables (preserves structure)
+  
+- **SeederRunner Class**
+  - Professional seeding management
+  - Smart table truncation with foreign key handling
+  - Multi-database driver support (PostgreSQL, MySQL, SQLite)
+  - Auto-skips migrations table
+  
+- **Features**
+  - ✅ Truncate all tables safely (disables FK checks)
+  - ✅ Re-run seeders after truncation
+  - ✅ Production safety (requires `--force` flag)
+  - ✅ Clear data without dropping tables
+  - ✅ Works with all database drivers
+  
+- **Usage Examples**
+  ```bash
+  # Fresh database with seeders
+  guruorm db:seed:refresh
+  
+  # Specify seeder class
+  guruorm db:seed:refresh --class=UserSeeder
+  
+  # Force in production
+  guruorm db:seed:refresh --force
+  
+  # Just clear data (no seeding)
+  guruorm db:clear --force
+  
+  # Regular seeding (unchanged)
+  guruorm db:seed
+  ```
+
+### Changed
+- Updated CLI to use new SeederRunner instead of inline seeding
+- Improved error messages for seeder operations
+
+### Technical Details
+- Added `src/CLI/SeederRunner.ts`
+- Implements driver-specific table listing queries
+- Handles foreign key constraints per database type
+- Auto-detection of migrations table
+
+---
+
 ## [1.16.0] - 2025-12-01
 
 ### Added

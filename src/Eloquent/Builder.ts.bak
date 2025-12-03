@@ -587,7 +587,6 @@ export class Builder {
   crossJoin(...args: any[]): this { return this.proxyToQueryBuilder('crossJoin', args); }
   orderBy(...args: any[]): this { return this.proxyToQueryBuilder('orderBy', args); }
   orderByDesc(...args: any[]): this { return this.proxyToQueryBuilder('orderByDesc', args); }
-  orderByRaw(...args: any[]): this { return this.proxyToQueryBuilder('orderByRaw', args); }
   latest(...args: any[]): this { return this.proxyToQueryBuilder('latest', args); }
   oldest(...args: any[]): this { return this.proxyToQueryBuilder('oldest', args); }
   inRandomOrder(...args: any[]): this { return this.proxyToQueryBuilder('inRandomOrder', args); }
