@@ -28,8 +28,11 @@ export class SeederMaker {
    * Get the class name for the seeder
    */
   protected getClassName(name: string): string {
-    // Ensure it ends with 'Seeder'
-    let className = name
+    // Strip existing 'Seeder' suffix to prevent double-suffixing
+    let baseName = name.replace(/Seeder$/i, '');
+    
+    // Convert to PascalCase
+    let className = baseName
       .split(/[_-]/)
       .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
       .join('');
