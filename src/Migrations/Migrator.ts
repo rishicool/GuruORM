@@ -236,28 +236,50 @@ export class Migrator {
   /**
    * Load a migration instance
    */
+  /**
+   * Load a migration file and return migration instance
+   */
   protected async loadMigration(file: MigrationFile): Promise<Migration> {
-    const migrationModule = require(file.path);
-    
-    // Support multiple export formats:
-    // 1. ES6 default export: export default class
-    // 2. CommonJS: module.exports = class
-    // 3. Named exports: export class Migration
-    let MigrationClass;
-    
-    if (migrationModule.default) {
-      MigrationClass = migrationModule.default;
-    } else if (typeof migrationModule === 'function') {
-      // CommonJS: module.exports = ClassName
-      MigrationClass = migrationModule;
-    } else {
-      // Named export or object with exports
-      MigrationClass = Object.values(migrationModule)[0];
+    // Support both ESM and CJS
+    let migrationModule;
+    try {
+      // Try dynamic import for ESM (file:// protocol required for absolute paths)
+      const fileUrl = file.path.startsWith('/') ? `file://${file.path}` : file.path;
+      migrationModule = await import(fileUrl);
+    } catch (error) {
+      // Fallback to require for CJS
+      try {
+        migrationModule = require(file.path);
+      } catch (reqError) {
+        throw new Error(`Failed to load migration ${file.name}: ${error}`);
+      }
     }
     
-    return new (MigrationClass as any)();
+    // Support multiple export formats:
+    // 1. ESM default export: export default class
+    // 2. ESM named function exports: export async function up/down
+    // 3. CommonJS: module.exports = class
+    // 4. Named exports: export class Migration
+    
+    if (migrationModule.default) {
+      // ESM default export or CJS with default wrapper
+      const MigrationClass = migrationModule.default;
+      return new (MigrationClass as any)();
+    } else if (migrationModule.up && migrationModule.down) {
+      // ESM function exports - return as Migration-compatible object
+      return {
+        up: () => migrationModule.up(),
+        down: () => migrationModule.down()
+      } as Migration;
+    } else if (typeof migrationModule === 'function') {
+      // Direct function export (CJS)
+      return new (migrationModule as any)();
+    } else {
+      // Named export or object with exports
+      const MigrationClass = Object.values(migrationModule)[0];
+      return new (MigrationClass as any)();
+    }
   }
-
   /**
    * Create the migration table if it doesn't exist
    */
