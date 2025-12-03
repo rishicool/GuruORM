@@ -1,4 +1,5 @@
 import * as path from 'path';
+import * as fs from 'fs';
 import { Manager } from '../Capsule/Manager';
 import chalk from 'chalk';
 
@@ -19,12 +20,28 @@ export class SeederRunner {
 
   /**
    * Initialize the database manager
+   * Supports both .cjs and .js config files
    */
   protected initializeManager(): Manager {
-    const configPath = path.join(process.cwd(), 'guruorm.config.js');
+    // Try .cjs first (for CommonJS in ES module projects)
+    const cjsConfigPath = path.join(process.cwd(), 'guruorm.config.cjs');
+    const jsConfigPath = path.join(process.cwd(), 'guruorm.config.js');
+    
+    let configPath: string;
+    
+    if (fs.existsSync(cjsConfigPath)) {
+      configPath = cjsConfigPath;
+    } else if (fs.existsSync(jsConfigPath)) {
+      configPath = jsConfigPath;
+    } else {
+      console.error(chalk.red('❌ Error loading GuruORM config'));
+      console.log(chalk.yellow('   Could not find guruorm.config.js or guruorm.config.cjs in your project root'));
+      console.log('');
+      throw new Error('GuruORM config file not found');
+    }
     
     try {
-      // Try to load guruorm.config.js
+      // Load config using require (works for both .cjs and .js in CommonJS context)
       const config = require(configPath);
       const manager = new Manager();
       
@@ -46,8 +63,8 @@ export class SeederRunner {
       
       return manager;
     } catch (error) {
-      console.error(chalk.red('❌ Error loading guruorm.config.js'));
-      console.log(chalk.yellow('   Make sure guruorm.config.js exists in your project root'));
+      console.error(chalk.red(`❌ Error loading ${path.basename(configPath)}`));
+      console.log(chalk.yellow('   Make sure your config file is valid'));
       console.log('');
       throw error;
     }
@@ -77,7 +94,7 @@ export class SeederRunner {
         throw new Error(`Seeder ${seederClass} must have a run() method`);
       }
       
-      await seeder.run();
+      await seeder.run(options.force || false);
       
       console.log('');
       console.log(chalk.green(`✅ Database seeding completed successfully!`));
@@ -151,6 +168,7 @@ export class SeederRunner {
     
     switch (driver) {
       case 'postgres':
+      case 'pgsql':
         query = `
           SELECT tablename as table_name 
           FROM pg_tables 
@@ -191,6 +209,7 @@ export class SeederRunner {
     
     switch (driver) {
       case 'postgres':
+      case 'pgsql':
         // PostgreSQL doesn't have a global setting, handle per table
         break;
         
@@ -212,6 +231,7 @@ export class SeederRunner {
     
     switch (driver) {
       case 'postgres':
+      case 'pgsql':
         // PostgreSQL doesn't have a global setting
         break;
         

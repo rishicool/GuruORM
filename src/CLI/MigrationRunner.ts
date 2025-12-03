@@ -24,7 +24,9 @@ export class MigrationRunner {
    * Load guruorm.config.js if exists
    */
   protected loadConfig(): any {
-    const configPath = path.join(process.cwd(), 'guruorm.config.js');
+    const cjsConfigPath = path.join(process.cwd(), 'guruorm.config.cjs');
+    const jsConfigPath = path.join(process.cwd(), 'guruorm.config.js');
+    const configPath = fs.existsSync(cjsConfigPath) ? cjsConfigPath : jsConfigPath;
     if (fs.existsSync(configPath)) {
       return require(configPath);
     }
