@@ -49,7 +49,7 @@ export class SeederMaker {
    */
   protected getFileName(name: string): string {
     const className = this.getClassName(name);
-    return `${className}.ts`;
+    return `${className}.js`;
   }
 
   /**
