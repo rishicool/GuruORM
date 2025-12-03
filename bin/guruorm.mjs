@@ -178,7 +178,7 @@ program
 program
   .command('db:seed')
   .description('Seed the database with records')
-  .option('--class <class>', 'The seeder class to run', 'DatabaseSeeder')
+  .option('--class <class>', 'The seeder class to run')
   .option('--force', 'Force the operation to run in production')
   .action(async (options) => {
     try {
@@ -198,7 +198,7 @@ program
   .command('db:seed:refresh')
   .alias('db:refresh')
   .description('Truncate all tables and re-run seeders')
-  .option('--class <class>', 'The seeder class to run', 'DatabaseSeeder')
+  .option('--class <class>', 'The seeder class to run')
   .option('--force', 'Force the operation to run in production')
   .action(async (options) => {
     try {
