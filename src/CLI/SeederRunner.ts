@@ -79,11 +79,60 @@ export class SeederRunner {
     class?: string;
     force?: boolean;
   } = {}): Promise<void> {
-    const seederClass = options.class || 'DatabaseSeeder';
+    const seederClass = options.class;
     
-    console.log(chalk.blue(`🌱 Seeding database with ${seederClass}...`));
+    // If specific seeder class provided, run only that one
+    if (seederClass) {
+      console.log(chalk.blue(`🌱 Running seeder: ${seederClass}...`));
+      console.log('');
+      await this.runSingleSeeder(seederClass, options.force || false);
+      return;
+    }
+    
+    // Try DatabaseSeeder first
+    const databaseSeederPath = path.join(this.seedersPath, 'DatabaseSeeder.js');
+    if (fs.existsSync(databaseSeederPath)) {
+      console.log(chalk.blue(`🌱 Seeding database with DatabaseSeeder...`));
+      console.log('');
+      await this.runSingleSeeder('DatabaseSeeder', options.force || false);
+      return;
+    }
+    
+    // If no DatabaseSeeder, run all seeders in the directory
+    console.log(chalk.yellow('ℹ️  DatabaseSeeder not found. Running all seeders...'));
     console.log('');
     
+    if (!fs.existsSync(this.seedersPath)) {
+      console.log(chalk.yellow('⚠️  No seeders directory found at database/seeders/'));
+      console.log(chalk.cyan('   Create a seeder with: guruorm make:seeder DatabaseSeeder'));
+      console.log('');
+      return;
+    }
+    
+    const seederFiles = fs.readdirSync(this.seedersPath)
+      .filter(file => file.endsWith('.js'))
+      .sort();
+    
+    if (seederFiles.length === 0) {
+      console.log(chalk.yellow('⚠️  No seeder files found in database/seeders/'));
+      console.log(chalk.cyan('   Create a seeder with: guruorm make:seeder DatabaseSeeder'));
+      console.log('');
+      return;
+    }
+    
+    console.log(chalk.blue(`Found ${seederFiles.length} seeder(s)`));
+    console.log('');
+    
+    for (const file of seederFiles) {
+      const seederName = file.replace('.js', '');
+      await this.runSingleSeeder(seederName, options.force || false);
+    }
+  }
+  
+  /**
+   * Run a single seeder by name
+   */
+  protected async runSingleSeeder(seederClass: string, force: boolean = false): Promise<void> {
     try {
       const seederPath = path.join(this.seedersPath, `${seederClass}.js`);
       const { default: SeederClass } = await import(seederPath);
@@ -94,17 +143,15 @@ export class SeederRunner {
         throw new Error(`Seeder ${seederClass} must have a run() method`);
       }
       
-      await seeder.run(options.force || false);
+      await seeder.run(force);
       
-      console.log('');
-      console.log(chalk.green(`✅ Database seeding completed successfully!`));
+      console.log(chalk.green(`✅ Seeded: ${seederClass}`));
     } catch (error: any) {
       if (error.code === 'MODULE_NOT_FOUND' || error.code === 'ERR_MODULE_NOT_FOUND') {
         console.error(chalk.red(`❌ Seeder not found: ${seederClass}`));
         console.log(chalk.yellow(`   Expected path: database/seeders/${seederClass}.js`));
-        console.log('');
-        console.log(chalk.cyan(`   Create it with: guruorm make:seeder ${seederClass}`));
       } else {
+        console.error(chalk.red(`❌ Error in ${seederClass}: ${error.message}`));
         throw error;
       }
     }

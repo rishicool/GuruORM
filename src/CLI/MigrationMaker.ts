@@ -125,25 +125,17 @@ export class MigrationMaker {
    * Get the create table stub
    */
   protected getCreateStub(): string {
-    return `import { Migration } from '../src/Migrations/Migration';
-import { Blueprint } from '../src/Schema/Blueprint';
-import { Schema } from '../src/Schema/Builder';
+    return `import { Schema } from 'guruorm';
 
-export class {{class}} extends Migration {
-  /**
-   * Run the migrations.
-   */
-  async up(): Promise<void> {
-    await Schema.create('{{table}}', (table: Blueprint) => {
+export default class {{class}} {
+  async up() {
+    await Schema.create('{{table}}', (table) => {
       table.id();
       table.timestamps();
     });
   }
 
-  /**
-   * Reverse the migrations.
-   */
-  async down(): Promise<void> {
+  async down() {
     await Schema.dropIfExists('{{table}}');
   }
 }
@@ -154,25 +146,17 @@ export class {{class}} extends Migration {
    * Get the update table stub
    */
   protected getUpdateStub(): string {
-    return `import { Migration } from '../src/Migrations/Migration';
-import { Blueprint } from '../src/Schema/Blueprint';
-import { Schema } from '../src/Schema/Builder';
+    return `import { Schema } from 'guruorm';
 
-export class {{class}} extends Migration {
-  /**
-   * Run the migrations.
-   */
-  async up(): Promise<void> {
-    await Schema.table('{{table}}', (table: Blueprint) => {
+export default class {{class}} {
+  async up() {
+    await Schema.table('{{table}}', (table) => {
       // Add your columns here
     });
   }
 
-  /**
-   * Reverse the migrations.
-   */
-  async down(): Promise<void> {
-    await Schema.table('{{table}}', (table: Blueprint) => {
+  async down() {
+    await Schema.table('{{table}}', (table) => {
       // Remove your columns here
     });
   }
