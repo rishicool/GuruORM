@@ -642,14 +642,15 @@ export class Builder {
     
     // Apply eager loading if specified (this was missing before!)
     if (Object.keys(this.eagerLoad).length > 0) {
-      const modelsArray = models.toArray();
+      // Use spread to extract model instances without serialization
+      const modelsArray = [...models];
       const eagerModels = await builder.eagerLoadRelations(modelsArray);
       models = new Collection(...eagerModels);
     }
     
     return {
       ...result,
-      data: models.toArray(),
+      data: [...models],
     };
   }
 
