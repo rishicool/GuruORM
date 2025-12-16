@@ -628,13 +628,28 @@ export class Builder {
 
   /**
    * Paginate the given query
+   * Fixed to properly handle eager loading relationships
    */
   async paginate(perPage: number = 15, page: number = 1): Promise<any> {
-    const result = await this.query.paginate(perPage, page);
+    // Apply scopes
+    const builder = this.applyScopes();
+    
+    // Get basic pagination from Query Builder
+    const result = await builder.query.paginate(perPage, page);
+    
+    // Hydrate to model instances
+    let models = builder.hydrate(result.data);
+    
+    // Apply eager loading if specified (this was missing before!)
+    if (Object.keys(this.eagerLoad).length > 0) {
+      const modelsArray = models.toArray();
+      const eagerModels = await builder.eagerLoadRelations(modelsArray);
+      models = new Collection(...eagerModels);
+    }
     
     return {
       ...result,
-      data: this.hydrate(result.data),
+      data: models.toArray(),
     };
   }
 
