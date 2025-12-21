@@ -382,6 +382,32 @@ export abstract class Connection implements ConnectionInterface {
   }
 
   /**
+   * Handle a query exception with enhanced error details
+   */
+  protected handleQueryException(error: Error, query: string, bindings: any[]): Error {
+    const enhancedError = new Error(error.message);
+    enhancedError.name = 'QueryException';
+    (enhancedError as any).sql = query;
+    (enhancedError as any).bindings = bindings;
+    (enhancedError as any).originalError = error;
+    enhancedError.stack = error.stack;
+    
+    // Log detailed error if logging is enabled
+    if (this.loggingQueries) {
+      console.error('[GuruORM Query Exception]', {
+        message: error.message,
+        sql: query,
+        bindings: bindings,
+        connection: this.name || 'default',
+        driver: this.getDriverName ? this.getDriverName() : 'unknown',
+        stack: error.stack
+      });
+    }
+    
+    return enhancedError;
+  }
+
+  /**
    * Get the name of the connected database driver
    */
   abstract getDriverName(): string;

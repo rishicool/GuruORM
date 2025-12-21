@@ -126,4 +126,63 @@ export class PostgresGrammar extends Grammar {
     this.parameterCounter = 0;
     return super.compileDelete(query);
   }
+
+  /**
+   * Compile the "order by" portions of the query for PostgreSQL
+   * Override to handle raw order clauses with ? placeholders
+   */
+  protected compileOrders(query: Builder, orders: any[]): string {
+    if (orders.length === 0) {
+      return '';
+    }
+
+    const compiled = orders
+      .map((order) => {
+        if (order.type === 'Random') {
+          return this.compileRandom(order.seed);
+        }
+        if (order.type === 'Raw') {
+          // Replace ? placeholders with $N for PostgreSQL
+          let sql = order.sql;
+          const matches = sql.match(/\?/g);
+          if (matches) {
+            for (let i = 0; i < matches.length; i++) {
+              sql = sql.replace('?', this.parameter());
+            }
+          }
+          return sql;
+        }
+        return `${this.wrap(order.column)} ${order.direction}`;
+      })
+      .join(', ');
+
+    return `order by ${compiled}`;
+  }
+
+  /**
+   * Compile the "group by" portions of the query for PostgreSQL
+   * Override to handle Raw group clauses with ? placeholder conversion
+   */
+  protected compileGroups(query: Builder, groups: any[]): string {
+    if (!groups || groups.length === 0) {
+      return '';
+    }
+
+    const compiled = groups.map((group) => {
+      if (typeof group === 'object' && group.type === 'Raw') {
+        // Replace ? placeholders with $N for PostgreSQL
+        let sql = group.sql;
+        const matches = sql.match(/\?/g);
+        if (matches) {
+          for (let i = 0; i < matches.length; i++) {
+            sql = sql.replace('?', this.parameter());
+          }
+        }
+        return sql;
+      }
+      return this.wrap(group);
+    }).join(', ');
+
+    return `group by ${compiled}`;
+  }
 }

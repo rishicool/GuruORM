@@ -184,13 +184,6 @@ export class PostgresConnection extends Connection {
   }
 
   /**
-   * Handle a query exception
-   */
-  protected handleQueryException(error: Error, query: string, bindings: any[]): Error {
-    return error;
-  }
-
-  /**
    * Set the query grammar to the default implementation
    */
   protected useDefaultQueryGrammar(): void {

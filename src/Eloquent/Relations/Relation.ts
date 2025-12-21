@@ -84,10 +84,114 @@ export abstract class Relation {
   }
 
   /**
+   * Add a raw where clause to the relationship query
+   */
+  whereRaw(sql: string, bindings: any[] = [], boolean: 'and' | 'or' = 'and'): this {
+    (this.query as any).whereRaw(sql, bindings, boolean);
+    return this;
+  }
+
+  /**
+   * Add an "or where" clause to the relationship query
+   */
+  orWhere(...args: any[]): this {
+    (this.query as any).orWhere(...args);
+    return this;
+  }
+
+  /**
+   * Add a raw "or where" clause to the relationship query
+   */
+  orWhereRaw(sql: string, bindings: any[] = []): this {
+    (this.query as any).orWhereRaw(sql, bindings);
+    return this;
+  }
+
+  /**
+   * Add a "where in" clause to the relationship query
+   */
+  whereIn(column: string, values: any[]): this {
+    (this.query as any).whereIn(column, values);
+    return this;
+  }
+
+  /**
+   * Add a "where not in" clause to the relationship query
+   */
+  whereNotIn(column: string, values: any[]): this {
+    (this.query as any).whereNotIn(column, values);
+    return this;
+  }
+
+  /**
+   * Add a "where null" clause to the relationship query
+   */
+  whereNull(column: string): this {
+    (this.query as any).whereNull(column);
+    return this;
+  }
+
+  /**
+   * Add a "where not null" clause to the relationship query
+   */
+  whereNotNull(column: string): this {
+    (this.query as any).whereNotNull(column);
+    return this;
+  }
+
+  /**
+   * Add a "where between" clause to the relationship query
+   */
+  whereBetween(column: string, values: [any, any]): this {
+    (this.query as any).whereBetween(column, values);
+    return this;
+  }
+
+  /**
+   * Add a "where not between" clause to the relationship query
+   */
+  whereNotBetween(column: string, values: [any, any]): this {
+    (this.query as any).whereNotBetween(column, values);
+    return this;
+  }
+
+  /**
    * Add an order by clause to the relationship query
    */
   orderBy(...args: any[]): this {
     (this.query as any).orderBy(...args);
+    return this;
+  }
+
+  /**
+   * Add a raw order by clause to the relationship query
+   */
+  orderByRaw(sql: string, bindings: any[] = []): this {
+    (this.query as any).orderByRaw(sql, bindings);
+    return this;
+  }
+
+  /**
+   * Order by the latest created records
+   */
+  latest(column: string = 'created_at'): this {
+    (this.query as any).latest(column);
+    return this;
+  }
+
+  /**
+   * Order by the oldest created records
+   */
+  oldest(column: string = 'created_at'): this {
+    (this.query as any).oldest(column);
+    return this;
+  }
+
+  /**
+   * Select specific columns
+   */
+  select(...columns: any[]): this {
+    (this.query as any).select(...columns);
     return this;
   }
 
