@@ -1314,7 +1314,7 @@ export class Builder {
   /**
    * Insert a new record and get the value of the primary key
    */
-  async insertGetId(values: any, sequence?: string): Promise<number> {
+  async insertGetId(values: any, sequence?: string): Promise<number | string> {
     const sql = this.grammar.compileInsertGetId(this, values, sequence);
     const bindings = this.grammar.prepareBindingsForInsert(this.bindings, [values]);
 
@@ -1328,7 +1328,8 @@ export class Builder {
     
     if (results && results.length > 0) {
       const id = Object.values(results[0])[0];
-      return typeof id === 'number' ? id : parseInt(String(id), 10);
+      // Return the actual ID value - don't force parseInt for UUIDs/strings
+      return id as number | string;
     }
 
     return 0;

@@ -271,7 +271,7 @@ export class Builder {
    * Eagerly load the relationship on a set of models
    */
   protected async eagerLoadRelation(models: any[], name: string, constraints: Function): Promise<any[]> {
-    // Get the relation instance
+    // Get the relation instance (FRESH instance for eager loading)
     const relation = this.getRelation(name);
     
     // Initialize the relation on all models (sets empty collections)
@@ -279,11 +279,12 @@ export class Builder {
       relation.initRelation(models, name);
     }
     
-    // Apply constraints
-    constraints(relation.getQuery());
-    
-    // Add eager constraints
+    // Add eager constraints FIRST (before user constraints)
+    // This ensures whereIn for foreign keys is applied before any inline where() from relation definition
     relation.addEagerConstraints(models);
+    
+    // Apply user-defined constraints AFTER eager constraints
+    constraints(relation.getQuery());
     
     // Get results
     const results = await relation.getQuery().get();
@@ -609,12 +610,68 @@ export class Builder {
 
   // Passthrough methods that return their results directly
   async insert(values: any): Promise<boolean | any[]> { return this.query.insert(values); }
-  async insertGetId(values: any, sequence?: string): Promise<number> { return this.query.insertGetId(values, sequence); }
+  async insertGetId(values: any, sequence?: string): Promise<number | string> { return this.query.insertGetId(values, sequence); }
   async insertOrIgnore(values: any): Promise<number> { return this.query.insertOrIgnore(values); }
   async update(values: Record<string, any>): Promise<number> { return this.query.update(values); }
   async increment(column: string, amount: number = 1, extra: Record<string, any> = {}): Promise<number> { return this.query.increment(column, amount, extra); }
   async decrement(column: string, amount: number = 1, extra: Record<string, any> = {}): Promise<number> { return this.query.decrement(column, amount, extra); }
-  async delete(id?: any): Promise<number> { return this.query.delete(id); }
+  
+  /**
+   * Delete records from the database
+   * Checks for soft delete support on the model
+   */
+  async delete(id?: any): Promise<number> {
+    // Check if model uses soft deletes
+    const modelConstructor = this.model.constructor as any;
+    const useSoftDeletes = modelConstructor.softDeletes === true || 
+                          modelConstructor.prototype?.softDeletes === true ||
+                          (this.model as any).softDeletes === true;
+    
+    // Get deleted_at column name (support both GuruORM and custom implementations)
+    const deletedAtColumn = modelConstructor.deletedAt || 
+                           modelConstructor.DELETED_AT || 
+                           (this.model as any).deletedAt ||
+                           'deleted_at';
+    
+    // If soft deletes enabled and not force deleting, perform soft delete
+    if (useSoftDeletes && !(this.query as any)._forceDelete) {
+      const time = new Date();
+      const updates: Record<string, any> = {
+        [deletedAtColumn]: time
+      };
+      
+      // Add updated_at if timestamps are enabled
+      const timestamps = modelConstructor.timestamps === true || 
+                        modelConstructor.prototype?.timestamps === true ||
+                        (this.model as any).timestamps === true;
+      
+      if (timestamps) {
+        const updatedAtColumn = modelConstructor.updatedAt || 
+                               modelConstructor.UPDATED_AT || 
+                               (this.model as any).updatedAt ||
+                               'updated_at';
+        updates[updatedAtColumn] = time;
+      }
+      
+      // Perform soft delete as an update
+      return await this.query.update(updates);
+    }
+    
+    // Otherwise perform hard delete
+    return this.query.delete(id);
+  }
+  
+  /**
+   * Force delete records (hard delete even with soft deletes enabled)
+   */
+  async forceDelete(id?: any): Promise<number> {
+    // Mark query as force deleting
+    (this.query as any)._forceDelete = true;
+    
+    // Perform hard delete
+    return this.query.delete(id);
+  }
+  
   async truncate(): Promise<void> { return this.query.truncate(); }
   async exists(): Promise<boolean> { return this.query.exists(); }
   async doesntExist(): Promise<boolean> { return this.query.doesntExist(); }

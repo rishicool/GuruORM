@@ -50,6 +50,19 @@ export class MorphMany extends Relation {
       this.query
         .where(this.foreignKey, '=', this.parent.getAttribute(this.localKey))
         .where(this.morphType, '=', this.parent.constructor.name);
+      
+      // Automatically apply soft delete constraint if related model uses soft deletes
+      const relatedModel = this.related;
+      const relatedConstructor = relatedModel.constructor as any;
+      const usesSoftDeletes = relatedConstructor.softDeletes === true || 
+                              relatedConstructor.prototype?.softDeletes === true;
+      
+      if (usesSoftDeletes) {
+        const deletedAtColumn = relatedConstructor.deletedAt || 
+                                relatedConstructor.DELETED_AT || 
+                                'deleted_at';
+        this.query.whereNull(deletedAtColumn);
+      }
     }
   }
 
@@ -57,10 +70,27 @@ export class MorphMany extends Relation {
    * Set the constraints for an eager load of the relation
    */
   addEagerConstraints(models: Model[]): void {
-    const keys = models.map(model => model.getAttribute(this.localKey));
-    this.query
-      .whereIn(this.foreignKey, keys)
-      .where(this.morphType, '=', this.parent.constructor.name);
+    // Get keys from parent models
+    const keys = models.map(model => model.getAttribute(this.localKey)).filter(k => k != null);
+    
+    // Only add whereIn if we have keys
+    if (keys.length > 0) {
+      this.query
+        .whereIn(this.foreignKey, keys)
+        .where(this.morphType, '=', this.parent.constructor.name);
+    }
+    
+    // Apply soft delete constraint for eager loading too
+    const relatedConstructor = this.related.constructor as any;
+    const usesSoftDeletes = relatedConstructor.softDeletes === true || 
+                            relatedConstructor.prototype?.softDeletes === true;
+    
+    if (usesSoftDeletes) {
+      const deletedAtColumn = relatedConstructor.deletedAt || 
+                              relatedConstructor.DELETED_AT || 
+                              'deleted_at';
+      this.query.whereNull(deletedAtColumn);
+    }
   }
 
   /**

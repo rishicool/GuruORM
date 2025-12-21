@@ -40,6 +40,18 @@ export class BelongsToMany extends Relation {
     if (this.parent.modelExists()) {
       this.addWhereConstraints();
     }
+    
+    // Apply soft delete constraint
+    const relatedConstructor = this.related.constructor as any;
+    const usesSoftDeletes = relatedConstructor.softDeletes === true || 
+                            relatedConstructor.prototype?.softDeletes === true;
+    
+    if (usesSoftDeletes) {
+      const deletedAtColumn = relatedConstructor.deletedAt || 
+                              relatedConstructor.DELETED_AT || 
+                              'deleted_at';
+      this.query.whereNull(`${this.related.getTable()}.${deletedAtColumn}`);
+    }
   }
 
   /**
@@ -86,6 +98,18 @@ export class BelongsToMany extends Relation {
     
     // Filter by parent keys
     this.query.whereIn(`${this.table}.${this.foreignPivotKey}`, keys);
+    
+    // Apply soft delete constraint for eager loading
+    const relatedConstructor = this.related.constructor as any;
+    const usesSoftDeletes = relatedConstructor.softDeletes === true || 
+                            relatedConstructor.prototype?.softDeletes === true;
+    
+    if (usesSoftDeletes) {
+      const deletedAtColumn = relatedConstructor.deletedAt || 
+                              relatedConstructor.DELETED_AT || 
+                              'deleted_at';
+      this.query.whereNull(`${this.related.getTable()}.${deletedAtColumn}`);
+    }
   }
 
   /**

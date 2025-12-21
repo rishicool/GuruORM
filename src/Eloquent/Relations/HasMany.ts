@@ -23,6 +23,19 @@ export class HasMany extends Relation {
   addConstraints(): void {
     if (this.parent.modelExists()) {
       this.query.where(this.foreignKey, '=', this.parent.getAttribute(this.localKey));
+      
+      // Automatically apply soft delete constraint if related model uses soft deletes
+      const relatedModel = this.related;
+      const relatedConstructor = relatedModel.constructor as any;
+      const usesSoftDeletes = relatedConstructor.softDeletes === true || 
+                              relatedConstructor.prototype?.softDeletes === true;
+      
+      if (usesSoftDeletes) {
+        const deletedAtColumn = relatedConstructor.deletedAt || 
+                                relatedConstructor.DELETED_AT || 
+                                'deleted_at';
+        this.query.whereNull(deletedAtColumn);
+      }
     }
   }
 
@@ -30,8 +43,25 @@ export class HasMany extends Relation {
    * Set the constraints for an eager load of the relation
    */
   addEagerConstraints(models: Model[]): void {
-    const keys = models.map(model => model.getAttribute(this.localKey));
-    this.query.whereIn(this.foreignKey, keys);
+    // Get keys from parent models
+    const keys = models.map(model => model.getAttribute(this.localKey)).filter(k => k != null);
+    
+    // Only add whereIn if we have keys
+    if (keys.length > 0) {
+      this.query.whereIn(this.foreignKey, keys);
+    }
+    
+    // Apply soft delete constraint for eager loading too
+    const relatedConstructor = this.related.constructor as any;
+    const usesSoftDeletes = relatedConstructor.softDeletes === true || 
+                            relatedConstructor.prototype?.softDeletes === true;
+    
+    if (usesSoftDeletes) {
+      const deletedAtColumn = relatedConstructor.deletedAt || 
+                              relatedConstructor.DELETED_AT || 
+                              'deleted_at';
+      this.query.whereNull(deletedAtColumn);
+    }
   }
 
   /**

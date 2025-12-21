@@ -24,6 +24,18 @@ export class BelongsTo extends Relation {
   addConstraints(): void {
     if (this.parent.modelExists()) {
       this.query.where(this.ownerKey, '=', this.parent.getAttribute(this.foreignKey));
+      
+      // Apply soft delete constraint
+      const relatedConstructor = this.related.constructor as any;
+      const usesSoftDeletes = relatedConstructor.softDeletes === true || 
+                              relatedConstructor.prototype?.softDeletes === true;
+      
+      if (usesSoftDeletes) {
+        const deletedAtColumn = relatedConstructor.deletedAt || 
+                                relatedConstructor.DELETED_AT || 
+                                'deleted_at';
+        this.query.whereNull(deletedAtColumn);
+      }
     }
   }
 
@@ -37,6 +49,18 @@ export class BelongsTo extends Relation {
     
     if (keys.length > 0) {
       this.query.whereIn(this.ownerKey, keys);
+    }
+    
+    // Apply soft delete constraint for eager loading
+    const relatedConstructor = this.related.constructor as any;
+    const usesSoftDeletes = relatedConstructor.softDeletes === true || 
+                            relatedConstructor.prototype?.softDeletes === true;
+    
+    if (usesSoftDeletes) {
+      const deletedAtColumn = relatedConstructor.deletedAt || 
+                              relatedConstructor.DELETED_AT || 
+                              'deleted_at';
+      this.query.whereNull(deletedAtColumn);
     }
   }
 

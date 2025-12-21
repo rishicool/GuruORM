@@ -20,10 +20,24 @@ export class HasOne extends Relation {
 
   /**
    * Set the base constraints on the relation query
+   * Only applies constraints if this is NOT an eager load scenario
    */
   addConstraints(): void {
     if (this.parent.modelExists()) {
       this.query.where(this.foreignKey, '=', this.parent.getAttribute(this.localKey));
+      
+      // Automatically apply soft delete constraint if related model uses soft deletes
+      const relatedModel = this.related;
+      const relatedConstructor = relatedModel.constructor as any;
+      const usesSoftDeletes = relatedConstructor.softDeletes === true || 
+                              relatedConstructor.prototype?.softDeletes === true;
+      
+      if (usesSoftDeletes) {
+        const deletedAtColumn = relatedConstructor.deletedAt || 
+                                relatedConstructor.DELETED_AT || 
+                                'deleted_at';
+        this.query.whereNull(deletedAtColumn);
+      }
     }
   }
 
@@ -31,8 +45,29 @@ export class HasOne extends Relation {
    * Set the constraints for an eager load of the relation
    */
   addEagerConstraints(models: Model[]): void {
-    const keys = models.map(model => model.getAttribute(this.localKey));
-    this.query.whereIn(this.foreignKey, keys);
+    // Get keys from parent models
+    const keys = models.map(model => model.getAttribute(this.localKey)).filter(k => k != null);
+    
+    console.log(`[HasOne addEagerConstraints] foreignKey=${this.foreignKey}, localKey=${this.localKey}`);
+    console.log(`[HasOne addEagerConstraints] keys from models:`, keys);
+    
+    // Only add whereIn if we have keys
+    if (keys.length > 0) {
+      this.query.whereIn(this.foreignKey, keys);
+      console.log(`[HasOne addEagerConstraints] Applied whereIn(${this.foreignKey}, [...${keys.length} keys])`);
+    }
+    
+    // Apply soft delete constraint for eager loading too
+    const relatedConstructor = this.related.constructor as any;
+    const usesSoftDeletes = relatedConstructor.softDeletes === true || 
+                            relatedConstructor.prototype?.softDeletes === true;
+    
+    if (usesSoftDeletes) {
+      const deletedAtColumn = relatedConstructor.deletedAt || 
+                              relatedConstructor.DELETED_AT || 
+                              'deleted_at';
+      this.query.whereNull(deletedAtColumn);
+    }
   }
 
   /**
@@ -50,13 +85,13 @@ export class HasOne extends Relation {
    */
   match(models: Model[], results: any, relation: string): Model[] {
     const dictionary: { [key: string]: any } = {};
-
+    
     // Build dictionary of results keyed by foreign key
     for (const result of results.items || results) {
       const key = result.getAttribute(this.foreignKey);
       dictionary[key] = result;
     }
-
+    
     // Match results to models
     for (const model of models) {
       const key = model.getAttribute(this.localKey);

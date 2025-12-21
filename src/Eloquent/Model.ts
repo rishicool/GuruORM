@@ -1560,14 +1560,19 @@ export class Model {
     // Store the actual constructor BEFORE wrapping in Proxy
     const actualConstructor = this.constructor;
     
-    // Copy model properties as non-enumerable to keep Object.keys() clean
-    const propertiesToCopy = [
+    // Properties that need DEEP copying (new object/array for each instance)
+    const objectPropertiesToCopy = ['relations', 'original', 'changes'];
+    const arrayPropertiesToCopy = ['touches'];
+    
+    // Properties that can be copied by reference (primitives or class-level data)
+    const simplePropertiesToCopy = [
       'table', 'primaryKey', 'keyType', 'incrementing', 'timestamps', 'dateFormat', 'connection',
       'fillable', 'guarded', 'hidden', 'visible', 'appends', 'casts', 'dispatchesEvents',
-      'original', 'relations', 'changes', 'wasRecentlyCreated', 'touches'
+      'wasRecentlyCreated'
     ];
     
-    for (const prop of propertiesToCopy) {
+    // Copy simple properties (primitives and class-level arrays)
+    for (const prop of simplePropertiesToCopy) {
       if (prop in this) {
         Object.defineProperty(model, prop, {
           value: this[prop as keyof this],
@@ -1576,6 +1581,26 @@ export class Model {
           configurable: true
         });
       }
+    }
+    
+    // Create NEW objects for properties that must not be shared
+    for (const prop of objectPropertiesToCopy) {
+      Object.defineProperty(model, prop, {
+        value: {}, // New empty object for each instance
+        writable: true,
+        enumerable: false,
+        configurable: true
+      });
+    }
+    
+    // Create NEW arrays for properties that must not be shared
+    for (const prop of arrayPropertiesToCopy) {
+      Object.defineProperty(model, prop, {
+        value: [], // New empty array for each instance
+        writable: true,
+        enumerable: false,
+        configurable: true
+      });
     }
     
     // Set attributes and exists as non-enumerable
