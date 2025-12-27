@@ -799,6 +799,10 @@ export class Model {
     }
 
     const attributes = this.attributes;
+    
+    // DEBUG: Log attributes being inserted
+    console.log('[GuruORM DEBUG] performInsert attributes:', JSON.stringify(attributes, null, 2));
+    console.log('[GuruORM DEBUG] attributes keys:', Object.keys(attributes));
 
     if (this.incrementing) {
       const id = await query.insertGetId(attributes);
