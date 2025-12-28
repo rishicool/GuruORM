@@ -47,14 +47,10 @@ export class HasOne extends Relation {
   addEagerConstraints(models: Model[]): void {
     // Get keys from parent models
     const keys = models.map(model => model.getAttribute(this.localKey)).filter(k => k != null);
-    
-    console.log(`[HasOne addEagerConstraints] foreignKey=${this.foreignKey}, localKey=${this.localKey}`);
-    console.log(`[HasOne addEagerConstraints] keys from models:`, keys);
-    
+     
     // Only add whereIn if we have keys
     if (keys.length > 0) {
       this.query.whereIn(this.foreignKey, keys);
-      console.log(`[HasOne addEagerConstraints] Applied whereIn(${this.foreignKey}, [...${keys.length} keys])`);
     }
     
     // Apply soft delete constraint for eager loading too
