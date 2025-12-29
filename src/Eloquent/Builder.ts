@@ -233,9 +233,12 @@ export class Builder {
     const segments = name.split('.');
     const firstRelation = segments[0];
     
-    // Check if the first level relation is already being loaded separately
-    // If not, we need to load it ourselves
-    if (!this.eagerLoad[firstRelation]) {
+    // Check if the first level relation needs to be loaded
+    // FIXED: Check if relation is already loaded on models, not just in eagerLoad
+    const needsLoad = !this.eagerLoad[firstRelation] && 
+                      models.some(model => !model.relations?.[firstRelation]);
+    
+    if (needsLoad) {
       models = await this.eagerLoadRelation(models, firstRelation, (q: any) => q);
     }
     
@@ -350,48 +353,147 @@ export class Builder {
    * Add a where clause based on a relationship's existence
    */
   has(relation: string, operator: string = '>=', count: number = 1): this {
-    // TODO: Implement proper relationship existence queries with EXISTS subqueries
-    // For now, return this to prevent crashes
-    return this;
+    return this.has_internal(relation, operator, count, 'and');
   }
 
   /**
    * Add a where clause based on a relationship's existence with callback
    */
   whereHas(relation: string, callback?: Function, operator: string = '>=', count: number = 1): this {
-    // TODO: Implement proper relationship existence queries with EXISTS subqueries
-    return this;
+    return this.has_internal(relation, operator, count, 'and', callback);
   }
 
   /**
    * Add a where clause that requires a relationship to NOT exist
    */
   doesntHave(relation: string): this {
-    // TODO: Implement proper relationship non-existence queries with NOT EXISTS subqueries
-    return this;
+    return this.doesntHave_internal(relation, 'and');
   }
 
   /**
    * Add a where clause that requires a relationship to NOT exist with callback
    */
   whereDoesntHave(relation: string, callback?: Function): this {
-    // TODO: Implement proper relationship non-existence queries with NOT EXISTS subqueries
-    return this;
+    return this.doesntHave_internal(relation, 'and', callback);
   }
 
   /**
    * Add an "or where" clause based on a relationship's existence
    */
   orWhereHas(relation: string, callback?: Function, operator: string = '>=', count: number = 1): this {
-    // Implementation similar to whereHas but with OR logic
-    return this;
+    return this.has_internal(relation, operator, count, 'or', callback);
   }
 
   /**
    * Add an "or where" clause that requires a relationship to NOT exist
    */
   orWhereDoesntHave(relation: string, callback?: Function): this {
-    // Implementation similar to whereDoesntHave but with OR logic
+    return this.doesntHave_internal(relation, 'or', callback);
+  }
+
+  /**
+   * Internal method to handle relationship existence queries
+   * Implements Laravel-style whereHas/has functionality
+   */
+  protected has_internal(relation: string, operator: string = '>=', count: number = 1, boolean: 'and' | 'or' = 'and', callback?: Function): this {
+    // Handle default parameters
+    if (typeof operator === 'function') {
+      callback = operator;
+      operator = '>=';
+      count = 1;
+    }
+
+    // Get the relation instance
+    const relationInstance = this.getRelation(relation);
+    
+    // Get the related query builder
+    const relationQuery = relationInstance.getQuery();
+    
+    // Get the foreign and local keys from the relation
+    let foreignKey: string;
+    let localKey: string;
+    let relatedTable: string;
+    
+    // Determine keys based on relation type
+    if ((relationInstance as any).foreignKey && (relationInstance as any).localKey) {
+      // HasMany, HasOne relations
+      foreignKey = (relationInstance as any).foreignKey;
+      localKey = (relationInstance as any).localKey;
+      relatedTable = relationQuery.getQuery().fromTable || relationInstance.getRelated().getTable();
+    } else if ((relationInstance as any).foreignKey && (relationInstance as any).ownerKey) {
+      // BelongsTo relation
+      foreignKey = (relationInstance as any).ownerKey;
+      localKey = (relationInstance as any).foreignKey;
+      relatedTable = relationQuery.getQuery().fromTable || relationInstance.getRelated().getTable();
+    } else {
+      throw new Error(`Unsupported relation type for whereHas: ${relation}`);
+    }
+
+    // Apply user callback constraints to the relation query
+    if (callback) {
+      callback(relationQuery);
+    }
+
+    // Build the EXISTS subquery
+    const existsQuery = relationQuery.getQuery();
+    
+    // Add the foreign key = local key constraint
+    const parentTable = this.model.getTable();
+    existsQuery.whereRaw(`${relatedTable}.${foreignKey} = ${parentTable}.${localKey}`);
+    
+    // For now, we only support simple EXISTS checks (count checks can be added later)
+    // Add EXISTS constraint
+    this.query.whereExists(existsQuery, boolean);
+
+    return this;
+  }
+
+  /**
+   * Internal method to handle relationship non-existence queries
+   * Implements Laravel-style whereDoesntHave/doesntHave functionality
+   */
+  protected doesntHave_internal(relation: string, boolean: 'and' | 'or' = 'and', callback?: Function): this {
+    // Get the relation instance
+    const relationInstance = this.getRelation(relation);
+    
+    // Get the related query builder
+    const relationQuery = relationInstance.getQuery();
+    
+    // Get the foreign and local keys from the relation
+    let foreignKey: string;
+    let localKey: string;
+    let relatedTable: string;
+    
+    // Determine keys based on relation type
+    if ((relationInstance as any).foreignKey && (relationInstance as any).localKey) {
+      // HasMany, HasOne relations
+      foreignKey = (relationInstance as any).foreignKey;
+      localKey = (relationInstance as any).localKey;
+      relatedTable = relationQuery.getQuery().fromTable || relationInstance.getRelated().getTable();
+    } else if ((relationInstance as any).foreignKey && (relationInstance as any).ownerKey) {
+      // BelongsTo relation
+      foreignKey = (relationInstance as any).ownerKey;
+      localKey = (relationInstance as any).foreignKey;
+      relatedTable = relationQuery.getQuery().fromTable || relationInstance.getRelated().getTable();
+    } else {
+      throw new Error(`Unsupported relation type for whereDoesntHave: ${relation}`);
+    }
+
+    // Apply user callback constraints to the relation query
+    if (callback) {
+      callback(relationQuery);
+    }
+
+    // Build the NOT EXISTS subquery
+    const existsQuery = relationQuery.getQuery();
+    
+    // Add the foreign key = local key constraint
+    const parentTable = this.model.getTable();
+    existsQuery.whereRaw(`${relatedTable}.${foreignKey} = ${parentTable}.${localKey}`);
+    
+    // Add NOT EXISTS
+    this.query.whereNotExists(existsQuery, boolean);
+
     return this;
   }
 

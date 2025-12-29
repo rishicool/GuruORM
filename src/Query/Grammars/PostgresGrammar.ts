@@ -81,6 +81,27 @@ export class PostgresGrammar extends Grammar {
   }
 
   /**
+   * Compile a basic where clause for PostgreSQL
+   * Handles LIKE/ILIKE operators by casting to TEXT to support UUID and other non-text types
+   */
+  protected whereBasic(query: Builder, where: any): string {
+    const operator = where.operator.toUpperCase();
+    
+    // For LIKE/ILIKE operators, cast both column and value to TEXT to handle UUID/numeric types
+    if (operator === 'LIKE' || operator === 'ILIKE' || operator === 'NOT LIKE' || operator === 'NOT ILIKE') {
+      // Only cast the column (no parameter), and cast the parameter placeholder
+      const column = `CAST(${this.wrap(where.column)} AS TEXT)`;
+      const parameter = this.parameter(where.value);
+      const value = `CAST(${parameter} AS TEXT)`;
+      return `${column} ${where.operator} ${value}`;
+    }
+    
+    // For other operators, use standard compilation
+    const value = this.parameter(where.value);
+    return `${this.wrap(where.column)} ${where.operator} ${value}`;
+  }
+
+  /**
    * Compile a "where like" clause for PostgreSQL
    */
   protected whereLike(query: Builder, where: any): string {
@@ -94,6 +115,89 @@ export class PostgresGrammar extends Grammar {
   protected whereNotLike(query: Builder, where: any): string {
     // Cast the column to text and use CAST for the parameter
     return `CAST(${this.wrap(where.column)} AS TEXT) not like CAST(${this.parameter(where.value)} AS TEXT)`;
+  }
+
+  /**
+   * Compile a "where exists" clause for PostgreSQL
+   * Renumber subquery parameters to continue from parent's counter
+   */
+  protected whereExists(query: Builder, where: any): string {
+    // Save current counter before subquery compilation resets it
+    const offset = this.parameterCounter;
+    
+    // Get the subquery SQL (this resets the counter internally)
+    const subquery = where.query.toSql();
+    
+    // Restore and update counter after subquery compilation
+    this.parameterCounter = offset;
+    
+    // Renumber the subquery's parameters to continue from current counter
+    // The subquery used $1, $2, $3... but we need to offset them
+    let renumbered = subquery;
+    
+    // Count how many parameters are in the subquery
+    const paramMatches = subquery.match(/\$\d+/g);
+    if (paramMatches) {
+      // Replace parameters in reverse order to avoid replacing $1 in $10
+      const uniqueParams = [...new Set(paramMatches)].sort((a: any, b: any) => {
+        const numA = parseInt((a as string).substring(1));
+        const numB = parseInt((b as string).substring(1));
+        return numB - numA; // Descending order
+      });
+      
+      for (const param of uniqueParams) {
+        const oldNum = parseInt((param as string).substring(1));
+        const newNum = oldNum + offset;
+        const regex = new RegExp('\\$' + oldNum + '(?!\\d)', 'g');
+        renumbered = renumbered.replace(regex, `$${newNum}`);
+      }
+      
+      // Update counter to account for subquery parameters
+      this.parameterCounter = offset + uniqueParams.length;
+    }
+    
+    return `exists (${renumbered})`;
+  }
+
+  /**
+   * Compile a "where not exists" clause for PostgreSQL
+   * Renumber subquery parameters to continue from parent's counter
+   */
+  protected whereNotExists(query: Builder, where: any): string {
+    // Save current counter before subquery compilation resets it
+    const offset = this.parameterCounter;
+    
+    // Get the subquery SQL (this resets the counter internally)
+    const subquery = where.query.toSql();
+    
+    // Restore and update counter after subquery compilation
+    this.parameterCounter = offset;
+    
+    // Renumber the subquery's parameters to continue from current counter
+    let renumbered = subquery;
+    
+    // Count how many parameters are in the subquery
+    const paramMatches = subquery.match(/\$\d+/g);
+    if (paramMatches) {
+      // Replace parameters in reverse order to avoid replacing $1 in $10
+      const uniqueParams = [...new Set(paramMatches)].sort((a: any, b: any) => {
+        const numA = parseInt((a as string).substring(1));
+        const numB = parseInt((b as string).substring(1));
+        return numB - numA; // Descending order
+      });
+      
+      for (const param of uniqueParams) {
+        const oldNum = parseInt((param as string).substring(1));
+        const newNum = oldNum + offset;
+        const regex = new RegExp('\\$' + oldNum + '(?!\\d)', 'g');
+        renumbered = renumbered.replace(regex, `$${newNum}`);
+      }
+      
+      // Update counter to account for subquery parameters
+      this.parameterCounter = offset + uniqueParams.length;
+    }
+    
+    return `not exists (${renumbered})`;
   }
 
   /**

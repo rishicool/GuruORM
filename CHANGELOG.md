@@ -2,6 +2,70 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.0.7] - 2025-12-29
+
+### Added
+- **Relationship Existence Queries (whereHas/orWhereHas)** 🔗
+  - `whereHas(relation, callback?)` - Filter models by relationship existence with optional constraints
+  - `orWhereHas(relation, callback?)` - OR version of whereHas
+  - `has(relation, operator?, count?)` - Simple relationship existence check
+  - `doesntHave(relation)` - Filter models where relationship doesn't exist
+  - `whereDoesntHave(relation, callback?)` - doesntHave with optional constraints
+  - `orWhereDoesntHave(relation, callback?)` - OR version of whereDoesntHave
+
+- **Features**
+  - ✅ Laravel Eloquent-style relationship querying
+  - ✅ Generates proper SQL EXISTS subqueries
+  - ✅ Supports HasMany, HasOne, and BelongsTo relations
+  - ✅ Automatic soft delete filtering in subqueries
+  - ✅ Complex nested callback constraints
+  - ✅ Proper foreign key correlation
+  
+- **Usage Examples**
+  ```javascript
+  // Basic existence check
+  StoreInventory.query().has('product');
+  
+  // With search constraints
+  StoreInventory.query()
+    .whereHas('product', pq => {
+      pq.where('name', 'ILIKE', '%phone%');
+    });
+  
+  // Multiple relations with OR logic
+  StoreInventory.query()
+    .whereHas('product', pq => {
+      pq.where('name', 'ILIKE', '%search%');
+    })
+    .orWhereHas('variant', vq => {
+      vq.where('variant_label', 'ILIKE', '%search%');
+    });
+  
+  // Non-existence
+  User.query().doesntHave('orders');
+  ```
+
+### Fixed
+- **whereHas Methods Were Non-Functional**
+  - Previously just returned `this` without implementation
+  - Now generates proper EXISTS subqueries
+  - Resolves `q.whereHas is not a function` error when used correctly
+
+### Technical Details
+- Added `has_internal()` method in Eloquent Builder
+- Added `doesntHave_internal()` method in Eloquent Builder
+- Implements proper relation key extraction (foreignKey/localKey/ownerKey)
+- Uses Query Builder's `whereExists()` and `whereNotExists()` methods
+- Documentation: `.ai-memory/WHEREHAS-IMPLEMENTATION.md`
+
+### Breaking Changes
+None - This is a new feature addition that was previously non-functional.
+
+### Notes
+- Count comparisons (e.g., `has('comments', '>=', 5)`) simplified to EXISTS-only for now
+- BelongsToMany, Through, and Morph relationships not yet supported
+- See `.ai-memory/WHEREHAS-IMPLEMENTATION.md` for complete documentation
+
 ## [1.17.3] - 2025-12-03
 
 ### Added
