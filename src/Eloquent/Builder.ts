@@ -340,12 +340,129 @@ export class Builder {
   }
 
   /**
-   * Add a relationship count to be eager loaded
+   * Add a relationship count to be eager loaded with correlated subquery
    */
   withCount(relations: string | string[] | Record<string, Function>): this {
-    // TODO: Implement proper relationship counting with subqueries
-    // For now, this is a placeholder to prevent crashes
-    // Proper implementation requires building a correlated subquery based on the relationship definition
+    return this.withAggregate(relations, '*', 'count');
+  }
+
+  /**
+   * Add a relationship average to be eager loaded with correlated subquery
+   */
+  withAvg(relations: string | string[] | Record<string, Function>, column: string): this {
+    return this.withAggregate(relations, column, 'avg');
+  }
+
+  /**
+   * Add a relationship sum to be eager loaded with correlated subquery
+   */
+  withSum(relations: string | string[] | Record<string, Function>, column: string): this {
+    return this.withAggregate(relations, column, 'sum');
+  }
+
+  /**
+   * Add a relationship min to be eager loaded with correlated subquery
+   */
+  withMin(relations: string | string[] | Record<string, Function>, column: string): this {
+    return this.withAggregate(relations, column, 'min');
+  }
+
+  /**
+   * Add a relationship max to be eager loaded with correlated subquery
+   */
+  withMax(relations: string | string[] | Record<string, Function>, column: string): this {
+    return this.withAggregate(relations, column, 'max');
+  }
+
+  /**
+   * Add a relationship aggregate with correlated subquery
+   * Implements Laravel-style withCount/withAvg/withSum/withMin/withMax
+   */
+  protected withAggregate(
+    relations: string | string[] | Record<string, Function>,
+    column: string,
+    aggregateFunction: 'count' | 'avg' | 'sum' | 'min' | 'max'
+  ): this {
+    // Ensure we're selecting all base columns first (check if columns array is empty)
+    const currentColumns = (this.query as any).columns;
+    if (!currentColumns || currentColumns.length === 0) {
+      this.query.select(`${this.model.getTable()}.*`);
+    }
+
+    // Normalize relations to array format
+    const relationsArray = typeof relations === 'string' ? [relations] : Array.isArray(relations) ? relations : Object.keys(relations);
+    const constraints = typeof relations === 'object' && !Array.isArray(relations) ? relations : {};
+
+    for (const relationName of relationsArray) {
+      // Parse relation name and alias (support "relation as alias" syntax)
+      const [relation, alias] = relationName.includes(' as ') 
+        ? relationName.split(' as ').map(s => s.trim())
+        : [relationName, null];
+
+      // Get the relation definition from the model
+      const relationMethod = (this.model as any)[relation];
+      if (typeof relationMethod !== 'function') {
+        throw new Error(`Relation "${relation}" does not exist on model ${this.model.constructor.name}`);
+      }
+
+      // Call the relation method to get the relation instance
+      const relationInstance = relationMethod.call(this.model);
+      
+      // Determine the column name for the aggregate result
+      // Default: {relation}_{aggregate}_{column} or {alias}
+      const aggregateColumn = alias || `${relation}_${aggregateFunction}_${column === '*' ? 'count' : column}`;
+
+      // Build the correlated subquery based on relation type
+      let subquery: any;
+      const relatedTable = relationInstance.getRelated().getTable();
+      const parentTable = this.model.getTable();
+
+      if (relationInstance.constructor.name === 'MorphMany' || relationInstance.constructor.name === 'MorphOne') {
+        // Polymorphic relations
+        const morphType = (relationInstance as any).morphType;
+        const foreignKey = (relationInstance as any).foreignKey;
+        const morphClass = this.model.constructor.name;
+        const localKey = (relationInstance as any).localKey || this.model.getKeyName();
+
+        subquery = this.query.newQuery()
+          .from(relatedTable)
+          .selectRaw(`${aggregateFunction.toUpperCase()}(${column === '*' ? '*' : `"${column}"`})`)
+          .whereRaw(`"${relatedTable}"."${foreignKey}" = "${parentTable}"."${localKey}"`)
+          .whereRaw(`"${relatedTable}"."${morphType}" = '${morphClass}'`);  // Use raw SQL to avoid binding issues
+
+      } else if (relationInstance.constructor.name === 'HasMany' || relationInstance.constructor.name === 'HasOne') {
+        // HasMany / HasOne relations
+        const foreignKey = (relationInstance as any).foreignKey;
+        const localKey = (relationInstance as any).localKey;
+
+        subquery = this.query.newQuery()
+          .from(relatedTable)
+          .selectRaw(`${aggregateFunction.toUpperCase()}(${column === '*' ? '*' : `"${column}"`})`)
+          .whereRaw(`"${relatedTable}"."${foreignKey}" = "${parentTable}"."${localKey}"`);
+
+      } else if (relationInstance.constructor.name === 'BelongsTo') {
+        // BelongsTo relations
+        const foreignKey = (relationInstance as any).foreignKey;
+        const ownerKey = (relationInstance as any).ownerKey;
+
+        subquery = this.query.newQuery()
+          .from(relatedTable)
+          .selectRaw(`${aggregateFunction.toUpperCase()}(${column === '*' ? '*' : `"${column}"`})`)
+          .whereRaw(`"${relatedTable}"."${ownerKey}" = "${parentTable}"."${foreignKey}"`);
+
+      } else {
+        throw new Error(`Relation type "${relationInstance.constructor.name}" is not supported for aggregates yet`);
+      }
+
+      // Apply any additional constraints from the relations object
+      if (constraints[relationName] && typeof constraints[relationName] === 'function') {
+        constraints[relationName](subquery);
+      }
+
+      // Add the subquery as a select
+      this.query.selectSub(subquery, aggregateColumn);
+    }
+
     return this;
   }
 

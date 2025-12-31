@@ -2,6 +2,66 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.0.9] - 2025-12-30
+
+### Added
+- **Laravel-style Relationship Aggregates** 🎯
+  - `withAvg(relation, column)` - Add average of related column to query results
+  - `withSum(relation, column)` - Add sum of related column to query results
+  - `withMin(relation, column)` - Add minimum of related column to query results
+  - `withMax(relation, column)` - Add maximum of related column to query results
+  - Proper `withCount(relation)` implementation with correlated subqueries
+  - Supports alias syntax: `withAvg('ratings as rating_avg', 'rating')`
+  - Enables eloquent sorting by relationships: `withAvg('ratings', 'rating').orderBy('ratings_avg_rating', 'desc')`
+
+### Fixed
+- **withCount** now actually works with proper correlated subqueries (was placeholder before)
+- **Binding Conflicts**: Fixed PostgreSQL parameter binding conflicts in subqueries by using raw SQL for morphType comparisons
+- **Column Selection**: Ensured base table columns (`table.*`) are selected when using aggregate methods
+- Supports HasMany, HasOne, BelongsTo, MorphMany, and MorphOne relationships
+- Automatic soft delete filtering in aggregate subqueries
+
+### Usage Examples
+```javascript
+// Add average rating and sort by it
+Store.withAvg('ratings', 'rating')
+  .orderBy('ratings_avg_rating', 'desc')
+  .get();
+
+// With custom alias
+Store.withAvg('ratings as rating_avg', 'rating')
+  .orderBy('rating_avg', 'desc')
+  .get();
+
+// Multiple aggregates
+Store.withCount('orders')
+  .withAvg('ratings', 'rating')
+  .withSum('orders', 'total')
+  .get();
+
+// With constraints
+Store.withAvg({
+  'ratings': (query) => query.where('rating', '>=', 4)
+}, 'rating')
+.get();
+```
+
+### Technical Details
+- Uses correlated subqueries for efficient aggregate calculation
+- Follows Laravel Eloquent naming convention: `{relation}_{function}_{column}`
+- Integrates with existing Query Builder's `selectSub` method
+- Properly handles relationship foreign keys and polymorphic relations
+
+## [2.0.8] - 2025-12-30
+
+### Fixed
+- **morphOne and morphMany String Model Resolution** 🔧
+  - Fixed `morphOne()` and `morphMany()` methods to properly support string-based model names
+  - Now uses `resolveModel()` like all other relationship methods (hasOne, hasMany, belongsTo, etc.)
+  - Resolves `TypeError: related is not a constructor` error when using string model names
+  - Example: `this.morphOne('Address', 'addressable')` now works correctly
+  - Changed parameter type from `typeof Model` to `typeof Model | string` for consistency
+
 ## [2.0.7] - 2025-12-29
 
 ### Added

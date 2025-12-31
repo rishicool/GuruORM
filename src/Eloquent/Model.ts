@@ -1911,15 +1911,16 @@ export class Model {
    * Define a polymorphic one-to-one relationship
    */
   morphOne(
-    related: typeof Model,
+    related: typeof Model | string,
     name: string,
     type?: string,
     id?: string,
     localKey?: string
   ): any {
     const { MorphOne } = require('./Relations/MorphOne');
+    const relatedClass = this.resolveModel(related);
+    const instance = new relatedClass();
     
-    const instance = new related();
     type = type || name + '_type';
     id = id || name + '_id';
     localKey = localKey || this.primaryKey;
@@ -1937,15 +1938,16 @@ export class Model {
    * Define a polymorphic one-to-many relationship
    */
   morphMany(
-    related: typeof Model,
+    related: typeof Model | string,
     name: string,
     type?: string,
     id?: string,
     localKey?: string
   ): any {
     const { MorphMany } = require('./Relations/MorphMany');
+    const relatedClass = this.resolveModel(related);
+    const instance = new relatedClass();
     
-    const instance = new related();
     type = type || name + '_type';
     id = id || name + '_id';
     localKey = localKey || this.primaryKey;

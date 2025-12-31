@@ -1194,7 +1194,6 @@ export class Builder {
   protected async runSelect(): Promise<any[]> {
     const sql = this.toSql();
     const bindings = this.getBindings();
-
     return this.connection.select(sql, bindings);
   }
 

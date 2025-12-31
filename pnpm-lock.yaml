@@ -29,9 +29,6 @@ importers:
       ora:
         specifier: ^5.4.1
         version: 5.4.1
-      pg:
-        specifier: ^8.11.3
-        version: 8.16.3
       tedious:
         specifier: ^16.6.1
         version: 16.7.1
@@ -78,6 +75,9 @@ importers:
       lint-staged:
         specifier: ^15.2.0
         version: 15.5.2
+      pg:
+        specifier: ^8.11.3
+        version: 8.16.3
       prettier:
         specifier: ^3.1.1
         version: 3.7.4
