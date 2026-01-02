@@ -36,6 +36,9 @@ export class MorphOne extends Relation {
     this.morphType = morphType;
     this.foreignKey = foreignKey;
     this.localKey = localKey;
+    
+    // Add the relationship constraints
+    this.addConstraints();
   }
 
   /**
@@ -43,9 +46,12 @@ export class MorphOne extends Relation {
    */
   addConstraints(): void {
     if (this.parent.modelExists()) {
+      const foreignKeyValue = this.parent.getAttribute(this.localKey);
+      const morphTypeValue = this.parent.constructor.name;
+      
       this.query
-        .where(this.foreignKey, '=', this.parent.getAttribute(this.localKey))
-        .where(this.morphType, '=', this.parent.constructor.name);
+        .where(this.foreignKey, '=', foreignKeyValue)
+        .where(this.morphType, '=', morphTypeValue);
       
       // Automatically apply soft delete constraint if related model uses soft deletes
       const relatedModel = this.related;
@@ -105,15 +111,20 @@ export class MorphOne extends Relation {
   match(models: Model[], results: any, relation: string): Model[] {
     const dictionary: { [key: string]: any } = {};
 
+    // Build dictionary with composite key: foreignKey + morphType
     for (const result of results.items || results) {
-      const key = result.getAttribute(this.foreignKey);
-      dictionary[key] = result;
+      const foreignKeyValue = result.getAttribute(this.foreignKey);
+      const morphTypeValue = result.getAttribute(this.morphType);
+      const compositeKey = `${foreignKeyValue}::${morphTypeValue}`;
+      dictionary[compositeKey] = result;
     }
 
     for (const model of models) {
-      const key = model.getAttribute(this.localKey);
-      if (dictionary[key]) {
-        model['relations'][relation] = dictionary[key];
+      const foreignKeyValue = model.getAttribute(this.localKey);
+      const morphTypeValue = model.constructor.name;
+      const compositeKey = `${foreignKeyValue}::${morphTypeValue}`;
+      if (dictionary[compositeKey]) {
+        model['relations'][relation] = dictionary[compositeKey];
       }
     }
 

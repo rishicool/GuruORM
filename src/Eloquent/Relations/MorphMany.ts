@@ -109,18 +109,23 @@ export class MorphMany extends Relation {
   match(models: Model[], results: any, relation: string): Model[] {
     const dictionary: { [key: string]: any[] } = {};
 
+    // Build dictionary with composite key: foreignKey + morphType
     for (const result of results.items || results) {
-      const key = result.getAttribute(this.foreignKey);
-      if (!dictionary[key]) {
-        dictionary[key] = [];
+      const foreignKeyValue = result.getAttribute(this.foreignKey);
+      const morphTypeValue = result.getAttribute(this.morphType);
+      const compositeKey = `${foreignKeyValue}::${morphTypeValue}`;
+      if (!dictionary[compositeKey]) {
+        dictionary[compositeKey] = [];
       }
-      dictionary[key].push(result);
+      dictionary[compositeKey].push(result);
     }
 
     for (const model of models) {
-      const key = model.getAttribute(this.localKey);
-      if (dictionary[key]) {
-        model['relations'][relation] = new Collection(...dictionary[key]);
+      const foreignKeyValue = model.getAttribute(this.localKey);
+      const morphTypeValue = model.constructor.name;
+      const compositeKey = `${foreignKeyValue}::${morphTypeValue}`;
+      if (dictionary[compositeKey]) {
+        model['relations'][relation] = new Collection(...dictionary[compositeKey]);
       }
     }
 
