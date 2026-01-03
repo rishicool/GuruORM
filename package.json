@@ -1,6 +1,6 @@
 {
   "name": "guruorm",
-  "version": "2.0.10",
+  "version": "2.0.11",
   "description": "A powerful, elegant Node.js ORM inspired by Laravel and Illuminate",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
