@@ -55,8 +55,65 @@ export class Builder {
     // Compile the CREATE TABLE statement
     const sql = this.grammar.compileCreateTable(table, columnDefinitions);
     
-    // Execute the statement
+    // Execute the CREATE TABLE statement
     await this.connection.statement(sql);
+    
+    // Process commands (indexes, foreign keys, etc.)
+    const commands = blueprint.getCommands();
+    for (const command of commands) {
+      await this.executeCommand(table, command);
+    }
+  }
+  
+  /**
+   * Execute a blueprint command
+   */
+  private async executeCommand(table: string, command: any): Promise<void> {
+    const tableName = this.grammar.wrapTable(table);
+    
+    switch (command.type) {
+      case 'primary':
+        const primaryCols = command.columns.map((col: string) => this.grammar.wrap(col)).join(', ');
+        await this.connection.statement(`ALTER TABLE ${tableName} ADD PRIMARY KEY (${primaryCols})`);
+        break;
+        
+      case 'unique':
+        const uniqueCols = command.columns.map((col: string) => this.grammar.wrap(col)).join(', ');
+        const uniqueName = command.index || `${table}_${command.columns.join('_')}_unique`;
+        await this.connection.statement(`ALTER TABLE ${tableName} ADD CONSTRAINT ${this.grammar.wrap(uniqueName)} UNIQUE (${uniqueCols})`);
+        break;
+        
+      case 'index':
+        const indexCols = command.columns.map((col: string) => this.grammar.wrap(col)).join(', ');
+        const indexName = command.index || `${table}_${command.columns.join('_')}_index`;
+        await this.connection.statement(`CREATE INDEX ${this.grammar.wrap(indexName)} ON ${tableName} (${indexCols})`);
+        break;
+        
+      case 'foreign':
+        const fkDef = command.definition.getDefinition();
+        const fkCols = fkDef.columns.map((col: string) => this.grammar.wrap(col)).join(', ');
+        const refCols = fkDef.references.map((col: string) => this.grammar.wrap(col)).join(', ');
+        const refTable = this.grammar.wrapTable(fkDef.on);
+        
+        let fkSql = `ALTER TABLE ${tableName} ADD FOREIGN KEY (${fkCols}) REFERENCES ${refTable} (${refCols})`;
+        
+        if (fkDef.onDelete) {
+          fkSql += ` ON DELETE ${fkDef.onDelete.toUpperCase()}`;
+        }
+        
+        if (fkDef.onUpdate) {
+          fkSql += ` ON UPDATE ${fkDef.onUpdate.toUpperCase()}`;
+        }
+        
+        await this.connection.statement(fkSql);
+        break;
+        
+      case 'spatialIndex':
+        const spatialCols = command.columns.map((col: string) => this.grammar.wrap(col)).join(', ');
+        const spatialName = command.index || `${table}_${command.columns.join('_')}_spatial`;
+        await this.connection.statement(`CREATE INDEX ${this.grammar.wrap(spatialName)} ON ${tableName} USING GIST (${spatialCols})`);
+        break;
+    }
   }
 
   /**

@@ -29,7 +29,7 @@ export class Grammar {
   /**
    * Wrap a value in keyword identifiers
    */
-  protected wrap(value: string): string {
+  wrap(value: string): string {
     if (value === '*') {
       return value;
     }
@@ -266,7 +266,12 @@ export class Grammar {
    * Wrap a default value
    */
   protected wrapDefaultValue(value: any): string {
-    // Handle raw SQL values
+    // Handle Expression objects (raw SQL)
+    if (value && typeof value === 'object' && typeof value.getValue === 'function') {
+      return value.getValue();
+    }
+    
+    // Handle raw SQL values with __raw property (legacy)
     if (typeof value === 'object' && value !== null && '__raw' in value) {
       return value.__raw;
     }
