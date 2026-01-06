@@ -10,6 +10,7 @@ import chalk from 'chalk';
 export class SeederRunner {
   protected manager: Manager;
   protected seedersPath: string;
+  protected seedersTable = 'seeders';
 
   constructor() {
     this.seedersPath = path.join(process.cwd(), 'database', 'seeders');
@@ -80,12 +81,16 @@ export class SeederRunner {
     force?: boolean;
   } = {}): Promise<void> {
     const seederClass = options.class;
+    const force = options.force || false;
+    
+    // Create seeders tracking table
+    await this.createSeedersTable();
     
     // If specific seeder class provided, run only that one
     if (seederClass) {
       console.log(chalk.blue(`🌱 Running seeder: ${seederClass}...`));
       console.log('');
-      await this.runSingleSeeder(seederClass, options.force || false);
+      await this.runSingleSeeder(seederClass, force);
       return;
     }
     
@@ -94,7 +99,7 @@ export class SeederRunner {
     if (fs.existsSync(databaseSeederPath)) {
       console.log(chalk.blue(`🌱 Seeding database with DatabaseSeeder...`));
       console.log('');
-      await this.runSingleSeeder('DatabaseSeeder', options.force || false);
+      await this.runSingleSeeder('DatabaseSeeder', force);
       return;
     }
     
@@ -125,7 +130,7 @@ export class SeederRunner {
     
     for (const file of seederFiles) {
       const seederName = file.replace('.js', '');
-      await this.runSingleSeeder(seederName, options.force || false);
+      await this.runSingleSeeder(seederName, force);
     }
   }
   
@@ -134,6 +139,15 @@ export class SeederRunner {
    */
   protected async runSingleSeeder(seederClass: string, force: boolean = false): Promise<void> {
     try {
+      // Check if seeder has already been run (unless --force is specified)
+      if (!force) {
+        const hasRun = await this.hasSeederRun(seederClass);
+        if (hasRun) {
+          console.log(chalk.gray(`⏭️  Skipped: ${seederClass} (already run)`));
+          return;
+        }
+      }
+      
       const seederPath = path.join(this.seedersPath, `${seederClass}.js`);
       const { default: SeederClass } = await import(seederPath);
       
@@ -143,7 +157,11 @@ export class SeederRunner {
         throw new Error(`Seeder ${seederClass} must have a run() method`);
       }
       
+      // Pass force flag to seeder
       await seeder.run(force);
+      
+      // Log seeder execution
+      await this.logSeeder(seederClass);
       
       console.log(chalk.green(`✅ Seeded: ${seederClass}`));
     } catch (error: any) {
@@ -331,6 +349,63 @@ export class SeederRunner {
       console.error(chalk.red('❌ Error clearing tables:'), error.message);
       throw error;
     }
+  }
+
+  /**
+   * Create the seeders tracking table if it doesn't exist
+   */
+  protected async createSeedersTable(): Promise<void> {
+    const connection = this.manager.getConnection();
+    const schema = connection.getSchemaBuilder();
+    
+    const hasTable = await schema.hasTable(this.seedersTable);
+    
+    if (!hasTable) {
+      await schema.create(this.seedersTable, (table: any) => {
+        table.increments('id');
+        table.string('seeder');
+        table.integer('batch');
+      });
+    }
+  }
+
+  /**
+   * Check if a seeder has already been run
+   */
+  protected async hasSeederRun(seederName: string): Promise<boolean> {
+    const connection = this.manager.getConnection();
+    const result = await connection
+      .table(this.seedersTable)
+      .where('seeder', seederName)
+      .first();
+    
+    return !!result;
+  }
+
+  /**
+   * Log a seeder execution
+   */
+  protected async logSeeder(seederName: string): Promise<void> {
+    const connection = this.manager.getConnection();
+    const batch = await this.getNextBatchNumber();
+    
+    await connection.table(this.seedersTable).insert({
+      seeder: seederName,
+      batch
+    });
+  }
+
+  /**
+   * Get the next batch number
+   */
+  protected async getNextBatchNumber(): Promise<number> {
+    const connection = this.manager.getConnection();
+    const result = await connection
+      .table(this.seedersTable)
+      .max('batch as max_batch')
+      .first();
+    
+    return (result?.max_batch || 0) + 1;
   }
 
   /**
