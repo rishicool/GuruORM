@@ -400,12 +400,21 @@ export class SeederRunner {
    */
   protected async getNextBatchNumber(): Promise<number> {
     const connection = this.manager.getConnection();
-    const result = await connection
+    const results = await connection
       .table(this.seedersTable)
-      .max('batch as max_batch')
-      .first();
+      .max('batch');
     
-    return (result?.max_batch || 0) + 1;
+    // Handle different return formats
+    let maxBatch = 0;
+    if (Array.isArray(results) && results.length > 0) {
+      maxBatch = results[0]?.max || results[0]?. ['max(batch)'] || 0;
+    } else if (typeof results === 'object' && results !== null) {
+      maxBatch = (results as any).max || (results as any)['max(batch)'] || 0;
+    } else if (typeof results === 'number') {
+      maxBatch = results;
+    }
+    
+    return (maxBatch || 0) + 1;
   }
 
   /**
