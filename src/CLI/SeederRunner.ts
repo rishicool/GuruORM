@@ -353,6 +353,7 @@ export class SeederRunner {
 
   /**
    * Create the seeders tracking table if it doesn't exist
+   * Also migrates legacy seeder tables to the new format
    */
   protected async createSeedersTable(): Promise<void> {
     const connection = this.manager.getConnection();
@@ -361,60 +362,203 @@ export class SeederRunner {
     const hasTable = await schema.hasTable(this.seedersTable);
     
     if (!hasTable) {
+      // Create new seeders table with proper structure
       await schema.create(this.seedersTable, (table: any) => {
         table.increments('id');
-        table.string('seeder');
+        table.string('seeder').unique();
         table.integer('batch');
       });
+    } else {
+      // Check if we need to migrate legacy seeder table
+      await this.migrateLegacySeedersTable(connection, schema);
+    }
+  }
+
+  /**
+   * Migrate legacy seeders table to new format
+   * Handles old structure with run_at instead of batch
+   * Also normalizes seeder names (removes .js extension if present)
+   */
+  protected async migrateLegacySeedersTable(connection: any, schema: any): Promise<void> {
+    try {
+      // Check if batch column exists
+      const hasBatchColumn = await schema.hasColumn(this.seedersTable, 'batch');
+      
+      if (!hasBatchColumn) {
+        // Check if this is a legacy table with run_at column
+        const hasRunAtColumn = await schema.hasColumn(this.seedersTable, 'run_at');
+        
+        if (hasRunAtColumn) {
+          // Migrate legacy table: add batch column
+          await schema.table(this.seedersTable, (table: any) => {
+            table.integer('batch').defaultTo(1);
+          });
+          
+          // Set all existing seeders to batch 1
+          await connection.table(this.seedersTable).update({ batch: 1 });
+        } else {
+          // Table exists but doesn't have batch or run_at - add batch column
+          await schema.table(this.seedersTable, (table: any) => {
+            table.integer('batch').defaultTo(1);
+          });
+        }
+      }
+
+      // Normalize seeder names: remove .js extension if present
+      // This ensures compatibility between old (with .js) and new (without .js) formats
+      const seeders = await connection.table(this.seedersTable).select('*').get();
+      
+      for (const seeder of seeders) {
+        if (seeder.seeder.endsWith('.js')) {
+          const normalizedName = seeder.seeder.replace('.js', '');
+          
+          // Check if normalized version already exists
+          const existing = await connection
+            .table(this.seedersTable)
+            .where('seeder', normalizedName)
+            .first();
+          
+          if (!existing) {
+            // Update to normalized name (without .js)
+            await connection
+              .table(this.seedersTable)
+              .where('id', seeder.id)
+              .update({ seeder: normalizedName });
+          } else {
+            // Normalized version exists, delete the old one with .js
+            await connection
+              .table(this.seedersTable)
+              .where('id', seeder.id)
+              .delete();
+          }
+        }
+      }
+
+      // Ensure seeder column has unique constraint
+      const hasUniqueConstraint = await this.hasUniqueConstraint(connection, this.seedersTable, 'seeder');
+      if (!hasUniqueConstraint) {
+        await schema.table(this.seedersTable, (table: any) => {
+          table.unique('seeder');
+        });
+      }
+    } catch (error: any) {
+      // If migration fails, log warning but don't fail the entire seeding process
+      console.log(chalk.yellow(`⚠️  Warning: Could not migrate legacy seeders table: ${error.message}`));
+    }
+  }
+
+  /**
+   * Check if a column has a unique constraint
+   */
+  protected async hasUniqueConstraint(connection: any, tableName: string, columnName: string): Promise<boolean> {
+    try {
+      const driver = connection.getConfig().driver;
+      
+      if (driver === 'postgresql' || driver === 'postgres' || driver === 'pgsql') {
+        const result = await connection.select(`
+          SELECT COUNT(*) as count
+          FROM pg_constraint
+          WHERE conrelid = '${tableName}'::regclass
+          AND contype = 'u'
+          AND conkey = (SELECT ARRAY[attnum] FROM pg_attribute WHERE attrelid = '${tableName}'::regclass AND attname = '${columnName}')
+        `);
+        return result[0]?.count > 0;
+      } else if (driver === 'mysql') {
+        const result = await connection.select(`
+          SELECT COUNT(*) as count
+          FROM information_schema.statistics
+          WHERE table_name = '${tableName}'
+          AND column_name = '${columnName}'
+          AND non_unique = 0
+        `);
+        return result[0]?.count > 0;
+      }
+      
+      // For other drivers, assume no constraint
+      return false;
+    } catch (error) {
+      return false;
     }
   }
 
   /**
    * Check if a seeder has already been run
+   * Checks for both normalized name (without .js) and legacy name (with .js)
    */
   protected async hasSeederRun(seederName: string): Promise<boolean> {
     const connection = this.manager.getConnection();
+    
+    // Check for normalized name (without .js)
     const result = await connection
       .table(this.seedersTable)
       .where('seeder', seederName)
       .first();
     
-    return !!result;
+    if (result) {
+      return true;
+    }
+    
+    // Also check for legacy name (with .js) for backward compatibility
+    const legacyName = `${seederName}.js`;
+    const legacyResult = await connection
+      .table(this.seedersTable)
+      .where('seeder', legacyName)
+      .first();
+    
+    return !!legacyResult;
   }
 
   /**
    * Log a seeder execution
+   * Always logs with normalized name (without .js extension)
    */
   protected async logSeeder(seederName: string): Promise<void> {
     const connection = this.manager.getConnection();
     const batch = await this.getNextBatchNumber();
     
-    await connection.table(this.seedersTable).insert({
-      seeder: seederName,
-      batch
-    });
+    // Normalize the seeder name (remove .js if present)
+    const normalizedName = seederName.replace(/\.js$/, '');
+    
+    // Check if already logged (shouldn't happen, but just in case)
+    const existing = await connection
+      .table(this.seedersTable)
+      .where('seeder', normalizedName)
+      .first();
+    
+    if (!existing) {
+      await connection.table(this.seedersTable).insert({
+        seeder: normalizedName,
+        batch
+      });
+    }
   }
 
   /**
    * Get the next batch number
+   * Safely handles cases where batch column might not exist
    */
   protected async getNextBatchNumber(): Promise<number> {
-    const connection = this.manager.getConnection();
-    const results = await connection
-      .table(this.seedersTable)
-      .max('batch');
-    
-    // Handle different return formats
-    let maxBatch = 0;
-    if (Array.isArray(results) && results.length > 0) {
-      maxBatch = results[0]?.max || results[0]?. ['max(batch)'] || 0;
-    } else if (typeof results === 'object' && results !== null) {
-      maxBatch = (results as any).max || (results as any)['max(batch)'] || 0;
-    } else if (typeof results === 'number') {
-      maxBatch = results;
+    try {
+      const connection = this.manager.getConnection();
+      const results = await connection
+        .table(this.seedersTable)
+        .max('batch');
+      
+      // Handle different return formats
+      let maxBatch = 0;
+      if (Array.isArray(results) && results.length > 0) {
+        maxBatch = results[0]?.max || results[0]?.['max(batch)'] || 0;
+      } else if (typeof results === 'object' && results !== null) {
+        maxBatch = (results as any).max || (results as any)['max(batch)'] || 0;
+      } else if (typeof results === 'number') {
+        maxBatch = results;
+      }
+      
+      return (maxBatch || 0) + 1;
+    } catch (error) {
+      // If batch column doesn't exist or query fails, return 1
+      return 1;
     }
-    
-    return (maxBatch || 0) + 1;
   }
 
   /**
