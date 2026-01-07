@@ -435,11 +435,19 @@ export class SeederRunner {
       }
 
       // Ensure seeder column has unique constraint
+      // Skip if already exists to avoid constraint errors
       const hasUniqueConstraint = await this.hasUniqueConstraint(connection, this.seedersTable, 'seeder');
       if (!hasUniqueConstraint) {
-        await schema.table(this.seedersTable, (table: any) => {
-          table.unique('seeder');
-        });
+        try {
+          await schema.table(this.seedersTable, (table: any) => {
+            table.unique('seeder');
+          });
+        } catch (constraintError: any) {
+          // Constraint might already exist, safe to ignore
+          if (!constraintError.message.includes('already exists')) {
+            throw constraintError;
+          }
+        }
       }
     } catch (error: any) {
       // If migration fails, log warning but don't fail the entire seeding process
@@ -449,29 +457,45 @@ export class SeederRunner {
 
   /**
    * Check if a column has a unique constraint
+   * Uses safe parameterized queries to prevent SQL injection
    */
   protected async hasUniqueConstraint(connection: any, tableName: string, columnName: string): Promise<boolean> {
     try {
       const driver = connection.getConfig().driver;
       
       if (driver === 'postgresql' || driver === 'postgres' || driver === 'pgsql') {
+        // Use safe query with table name check
         const result = await connection.select(`
           SELECT COUNT(*) as count
-          FROM pg_constraint
-          WHERE conrelid = '${tableName}'::regclass
-          AND contype = 'u'
-          AND conkey = (SELECT ARRAY[attnum] FROM pg_attribute WHERE attrelid = '${tableName}'::regclass AND attname = '${columnName}')
-        `);
-        return result[0]?.count > 0;
+          FROM pg_constraint c
+          JOIN pg_class t ON c.conrelid = t.oid
+          JOIN pg_attribute a ON a.attrelid = t.oid AND a.attnum = ANY(c.conkey)
+          WHERE t.relname = ?
+          AND a.attname = ?
+          AND c.contype = 'u'
+        `, [tableName, columnName]);
+        return parseInt(result[0]?.count || '0') > 0;
       } else if (driver === 'mysql') {
         const result = await connection.select(`
           SELECT COUNT(*) as count
           FROM information_schema.statistics
-          WHERE table_name = '${tableName}'
-          AND column_name = '${columnName}'
+          WHERE table_schema = DATABASE()
+          AND table_name = ?
+          AND column_name = ?
           AND non_unique = 0
-        `);
-        return result[0]?.count > 0;
+        `, [tableName, columnName]);
+        return parseInt(result[0]?.count || '0') > 0;
+      } else if (driver === 'sqlite') {
+        // SQLite unique constraint check
+        const result = await connection.select(`
+          SELECT COUNT(*) as count
+          FROM sqlite_master
+          WHERE type = 'index'
+          AND tbl_name = ?
+          AND sql LIKE '%UNIQUE%'
+          AND sql LIKE ?
+        `, [tableName, `%${columnName}%`]);
+        return parseInt(result[0]?.count || '0') > 0;
       }
       
       // For other drivers, assume no constraint
