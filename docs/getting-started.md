@@ -96,12 +96,16 @@ await Schema.dropIfExists('users');
 
 ## Eloquent Models
 
+GuruORM supports **three ways** to define model properties:
+
+**1. Static Properties (Cleanest - Recommended):**
 ```typescript
 import { Model } from 'guruorm';
 
 class User extends Model {
-  protected table = 'users';
-  protected fillable = ['name', 'email'];
+  static table = 'users';
+  static fillable = ['name', 'email'];
+  static casts = { is_active: 'boolean' };
 }
 
 // Create
@@ -113,12 +117,40 @@ const user = await User.create({
 // Find
 const user = await User.find(1);
 
-// Update
-await user.update({ name: 'Jane Doe' });
+// Update - Direct property assignment via Proxy
+user.name = 'Jane Doe';
+await user.update();
 
 // Delete
 await user.delete();
 ```
+
+**2. Protected Instance Properties (TypeScript Style):**
+```typescript
+import { Model } from 'guruorm';
+
+class User extends Model {
+  protected table = 'users';
+  protected fillable = ['name', 'email'];
+  protected casts = { is_active: 'boolean' };
+}
+```
+
+**3. Constructor with this (JavaScript Style):**
+```typescript
+import { Model } from 'guruorm';
+
+class User extends Model {
+  constructor() {
+    super();
+    this.table = 'users';
+    this.fillable = ['name', 'email'];
+    this.casts = { is_active: 'boolean' };
+  }
+}
+```
+
+> **Note:** All three patterns are fully supported. For properties like `fillable`, `guarded`, `casts`, `hidden`, `visible`, and `appends`, GuruORM checks **static properties first**, then falls back to instance properties. Choose the pattern that best fits your project's style.
 
 ## Next Steps
 

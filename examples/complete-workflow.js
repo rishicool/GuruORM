@@ -9,7 +9,7 @@
  * 5. Eloquent Models with relationships
  */
 
-const { Capsule, Schema, DB, Model } = require('../dist');
+const { Capsule, Schema, DB, Model } = require('guruorm');
 
 // Setup database connection
 const capsule = new Capsule();
@@ -26,13 +26,17 @@ capsule.addConnection({
 capsule.setAsGlobal();
 capsule.bootEloquent();
 
-// Define Models
+/**
+ * GuruORM Model Property Patterns:
+ * This example uses static properties (cleanest pattern).
+ * Alternatives: protected instance properties, or constructor with this.
+ * See docs/eloquent.md#defining-models for details.
+ */
+
+// Define Models using static properties
 class User extends Model {
-  constructor() {
-    super();
-    this.table = 'users';
-    this.fillable = ['name', 'email'];
-  }
+  static table = 'users';
+  static fillable = ['name', 'email'];
 
   posts() {
     return this.hasMany(Post);
@@ -40,11 +44,8 @@ class User extends Model {
 }
 
 class Post extends Model {
-  constructor() {
-    super();
-    this.table = 'posts';
-    this.fillable = ['user_id', 'title', 'content'];
-  }
+  static table = 'posts';
+  static fillable = ['user_id', 'title', 'content'];
 
   author() {
     return this.belongsTo(User, 'user_id');
@@ -140,8 +141,8 @@ async function main() {
     console.log('✨ Using Eloquent Models...');
 
     // Find user
-    const user = await User.find(1);
-    console.log(`Found user: ${user.get('name')}`);
+    const user = await User.first();
+    console.log(`Found user: ${user.name}`);
 
     // Create new post using Eloquent
     const newPost = await Post.create({
@@ -150,7 +151,7 @@ async function main() {
       content: 'Created using Eloquent ORM!',
     });
 
-    console.log(`✅ Created post: ${newPost.get('title')}`);
+    console.log(`✅ Created post: ${newPost.title}`);
 
     // Query with where clauses
     const johnsPosts = await Post.where('user_id', 1).get();
@@ -160,11 +161,11 @@ async function main() {
     console.log('🔗 Working with Relationships...');
 
     // Eager loading
-    const usersWithPosts = await User.with('posts').get();
+    const usersWithPosts = await User.with(['posts']).get();
     
-    for (const u of usersWithPosts) {
-      const posts = u.getRelation('posts');
-      console.log(`${u.get('name')} has ${posts.length} posts`);
+    for (const user of usersWithPosts) {
+      const posts = user.posts;
+      console.log(`${user.name} has ${posts.length} posts`);
     }
 
     console.log('');
@@ -217,8 +218,8 @@ async function main() {
 
     // Update using Eloquent
     const post = await Post.find(1);
-    post.set('content', 'Updated content via Eloquent');
-    await post.save();
+    post.content = 'Updated content via Eloquent';
+    await post.update();
 
     console.log('✅ Updated post via Eloquent');
 

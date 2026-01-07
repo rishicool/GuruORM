@@ -19,10 +19,7 @@ capsule.setAsGlobal();
 capsule.bootEloquent();
 
 class User extends Model {
-  constructor() {
-    super();
-    this.table = 'users';
-  }
+  static table = 'users';
 }
 
 async function benchmark() {

@@ -310,6 +310,8 @@ export default class CreateLikesTable extends Migration {
 
 ## Defining Models
 
+> **Note:** GuruORM supports three ways to define model properties: static properties, protected instance properties, or constructor with `this`. In this tutorial, we use **static properties** (the cleanest pattern). For alternatives, see [Eloquent ORM documentation](./eloquent.md#defining-models).
+
 ### 1. User Model
 
 **`src/models/User.ts`**
@@ -322,11 +324,10 @@ import Comment from './Comment';
 import Like from './Like';
 
 export default class User extends Model {
-  protected table = 'users';
-  protected fillable = ['name', 'email', 'password'];
-  protected hidden = ['password', 'remember_token'];
-  
-  protected casts = {
+  static table = 'users';
+  static fillable = ['name', 'email', 'password'];
+  static hidden = ['password', 'remember_token'];
+  static casts = {
     email_verified_at: 'datetime',
   };
 
@@ -366,8 +367,8 @@ import Comment from './Comment';
 import Like from './Like';
 
 export default class Post extends Model {
-  protected table = 'posts';
-  protected fillable = [
+  static table = 'posts';
+  static fillable = [
     'user_id',
     'category_id',
     'title',
@@ -377,8 +378,7 @@ export default class Post extends Model {
     'published',
     'published_at',
   ];
-
-  protected casts = {
+  static casts = {
     published: 'boolean',
     published_at: 'datetime',
     views: 'integer',
@@ -435,8 +435,8 @@ import { Model } from 'guruorm';
 import Post from './Post';
 
 export default class Category extends Model {
-  protected table = 'categories';
-  protected fillable = ['name', 'slug', 'description'];
+  static table = 'categories';
+  static fillable = ['name', 'slug', 'description'];
 
   // Relationships
   posts() {
@@ -458,8 +458,8 @@ import { Model } from 'guruorm';
 import Post from './Post';
 
 export default class Tag extends Model {
-  protected table = 'tags';
-  protected fillable = ['name', 'slug'];
+  static table = 'tags';
+  static fillable = ['name', 'slug'];
 
   // Relationships
   posts() {
@@ -478,10 +478,9 @@ import Post from './Post';
 import User from './User';
 
 export default class Comment extends Model {
-  protected table = 'comments';
-  protected fillable = ['post_id', 'user_id', 'parent_id', 'body', 'approved'];
-  
-  protected casts = {
+  static table = 'comments';
+  static fillable = ['post_id', 'user_id', 'parent_id', 'body', 'approved'];
+  static casts = {
     approved: 'boolean',
   };
 
@@ -522,8 +521,8 @@ import { Model } from 'guruorm';
 import User from './User';
 
 export default class Profile extends Model {
-  protected table = 'profiles';
-  protected fillable = ['user_id', 'avatar', 'bio', 'website', 'twitter', 'github'];
+  static table = 'profiles';
+  static fillable = ['user_id', 'avatar', 'bio', 'website', 'twitter', 'github'];
 
   // Relationships
   user() {
@@ -542,8 +541,8 @@ import User from './User';
 import Post from './Post';
 
 export default class Like extends Model {
-  protected table = 'likes';
-  protected fillable = ['user_id', 'post_id'];
+  static table = 'likes';
+  static fillable = ['user_id', 'post_id'];
 
   // Relationships
   user() {

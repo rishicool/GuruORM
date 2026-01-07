@@ -303,10 +303,10 @@ This loop will execute one query to retrieve all of the books within the databas
 Thankfully, we can use eager loading to reduce this operation to just two queries. When building a query, you may specify which relationships should be eager loaded using the `with` method:
 
 ```typescript
-const books = await Book.with('author').get();
+const books = await Book.with(['author']).get();
 
 for (const book of books) {
-  console.log(book.author.name);
+  console.log(book.author.name); // Direct property access
 }
 ```
 
@@ -331,7 +331,7 @@ const books = await Book.with(['author', 'publisher']).get();
 To eager load a relationship's relationships, you may use "dot" syntax. For example, let's eager load all of the book's authors and all of the author's personal contacts:
 
 ```typescript
-const books = await Book.with('author.contacts').get();
+const books = await Book.with(['author.contacts']).get();
 ```
 
 ### Eager Loading Specific Columns
@@ -339,7 +339,7 @@ const books = await Book.with('author.contacts').get();
 You may not always need every column from the relationships you are retrieving. For this reason, Eloquent allows you to specify which columns of the relationship you would like to retrieve:
 
 ```typescript
-const books = await Book.with('author:id,name,book_id').get();
+const books = await Book.with(['author:id,name,book_id']).get();
 ```
 
 > **Warning:** When using this feature, you should always include the `id` column and any relevant foreign key columns in the list of columns you wish to retrieve.
@@ -366,7 +366,7 @@ import Book from './models/Book';
 const books = await Book.all();
 
 if (someCondition) {
-  await books.load('author');
+  await books.load(['author']);
 }
 ```
 
@@ -381,7 +381,7 @@ await author.load({
 To load a relationship only when it has not already been loaded, use the `loadMissing` method:
 
 ```typescript
-await book.loadMissing('author');
+await book.loadMissing(['author']);
 
 // With constraints
 await book.loadMissing({
@@ -901,7 +901,10 @@ import { Model } from 'guruorm';
 import Post from './Post';
 
 class Comment extends Model {
-  protected touches = ['post'];
+  constructor() {
+    super();
+    this.touches = ['post'];
+  }
 
   post() {
     return this.belongsTo(Post);

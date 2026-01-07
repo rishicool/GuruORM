@@ -5,7 +5,7 @@
  * for optimal performance in production.
  */
 
-const { Capsule } = require('../dist');
+const { Capsule } = require('guruorm');
 
 // Setup with custom connection pool settings
 const capsule = new Capsule();

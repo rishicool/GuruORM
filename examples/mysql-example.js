@@ -24,20 +24,14 @@ capsule.bootEloquent();
 
 // Define User Model
 class User extends Model {
-  constructor() {
-    super();
-    this.table = 'users';
-    this.fillable = ['name', 'email', 'age'];
-  }
+  static table = 'users';
+  static fillable = ['name', 'email', 'age'];
 }
 
 // Define Post Model
 class Post extends Model {
-  constructor() {
-    super();
-    this.table = 'posts';
-    this.fillable = ['user_id', 'title', 'content'];
-  }
+  static table = 'posts';
+  static fillable = ['user_id', 'title', 'content'];
 
   user() {
     return this.belongsTo(User);
@@ -127,7 +121,7 @@ async function main() {
 
     // Test 10: Eloquent Relationships
     console.log('🔟 Testing Eloquent Relationships');
-    const userWithPosts = await User.with('posts').first();
+    const userWithPosts = await User.with(['posts']).first();
     if (userWithPosts) {
       console.log(`   User: ${userWithPosts.name}`);
       console.log(`   Posts: ${userWithPosts.posts ? userWithPosts.posts.length : 0}`);

@@ -29,13 +29,17 @@ capsule.bootEloquent();
 // 2. Define Models (Plain JavaScript)
 // ==========================================
 
+/**
+ * GuruORM Model Property Patterns:
+ * This example uses static properties (cleanest pattern).
+ * Alternatives: protected instance properties, or constructor with this.
+ * See docs/eloquent.md#defining-models for details.
+ */
+
 class User extends Model {
-  constructor() {
-    super();
-    this.table = 'users';
-    this.fillable = ['name', 'email', 'password'];
-    this.hidden = ['password'];
-  }
+  static table = 'users';
+  static fillable = ['name', 'email', 'password'];
+  static hidden = ['password'];
 
   // Define relationships
   posts() {
@@ -48,11 +52,8 @@ class User extends Model {
 }
 
 class Post extends Model {
-  constructor() {
-    super();
-    this.table = 'posts';
-    this.fillable = ['title', 'body', 'user_id'];
-  }
+  static table = 'posts';
+  static fillable = ['title', 'body', 'user_id'];
 
   user() {
     return this.belongsTo(User);
@@ -64,11 +65,8 @@ class Post extends Model {
 }
 
 class Profile extends Model {
-  constructor() {
-    super();
-    this.table = 'profiles';
-    this.fillable = ['bio', 'avatar', 'user_id'];
-  }
+  static table = 'profiles';
+  static fillable = ['bio', 'avatar', 'user_id'];
 
   user() {
     return this.belongsTo(User);
@@ -76,11 +74,8 @@ class Profile extends Model {
 }
 
 class Comment extends Model {
-  constructor() {
-    super();
-    this.table = 'comments';
-    this.fillable = ['body', 'post_id', 'user_id'];
-  }
+  static table = 'comments';
+  static fillable = ['body', 'post_id', 'user_id'];
 
   post() {
     return this.belongsTo(Post);
@@ -141,30 +136,34 @@ async function eloquentExamples() {
     email: 'john@example.com',
     password: 'secret123'
   });
-  console.log('Created user:', user);
+  console.log('Created user:', user.name);
 
   // Find
   const foundUser = await User.find(1);
-  console.log('Found user:', foundUser);
+  if (foundUser) {
+    console.log('Found user:', foundUser.name);
+  }
 
   // Update
-  foundUser.name = 'Jane Doe';
-  await foundUser.save();
-  console.log('Updated user:', foundUser);
+  if (foundUser) {
+    foundUser.name = 'Jane Doe';
+    await foundUser.update();
+    console.log('Updated user:', foundUser.name);
+  }
 
   // Query with where
   const activeUsers = await User.where('active', true)
     .orderBy('created_at', 'desc')
     .limit(10)
     .get();
-  console.log('Active users:', activeUsers);
+  console.log('Active users:', activeUsers.length);
 
   // First or create
   const [user2, created] = await User.firstOrCreate(
     { email: 'admin@example.com' },
     { name: 'Admin', password: 'admin123' }
   );
-  console.log('User:', user2, 'Created:', created);
+  console.log('User:', user2.name, 'Created:', created);
 }
 
 // ==========================================
@@ -175,27 +174,29 @@ async function relationshipExamples() {
   console.log('\n=== Relationship Examples ===\n');
 
   // Eager loading
-  const usersWithPosts = await User.with('posts').get();
-  console.log('Users with posts:', usersWithPosts);
+  const usersWithPosts = await User.with(['posts']).get();
+  console.log('Users with posts:', usersWithPosts.length);
 
   // Nested eager loading
   const usersWithPostsAndComments = await User.with(['posts', 'posts.comments']).get();
-  console.log('Users with nested relations:', usersWithPostsAndComments);
+  console.log('Users with nested relations:', usersWithPostsAndComments.length);
 
   // Lazy loading
   const user = await User.find(1);
-  const posts = await user.posts().get();
-  console.log('User posts:', posts);
+  if (user) {
+    const posts = await user.posts().get();
+    console.log('User posts:', posts.length);
+  }
 
   // Has relationship query
   const usersWithPosts2 = await User.has('posts').get();
-  console.log('Users that have posts:', usersWithPosts2);
+  console.log('Users that have posts:', usersWithPosts2.length);
 
   // Where has
   const usersWithPopularPosts = await User.whereHas('posts', (query) => {
     query.where('views', '>', 1000);
   }).get();
-  console.log('Users with popular posts:', usersWithPopularPosts);
+  console.log('Users with popular posts:', usersWithPopularPosts.length);
 }
 
 // ==========================================
@@ -232,8 +233,10 @@ async function advancedExamples() {
   // Query without timestamps
   await Model.withoutTimestamps(async () => {
     const user = await User.find(1);
-    user.name = 'Updated Name';
-    await user.save(); // Timestamps won't be updated
+    if (user) {
+      user.name = 'Updated Name';
+      await user.update(); // Timestamps won't be updated
+    }
   });
 }
 

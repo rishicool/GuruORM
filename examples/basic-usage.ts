@@ -1,4 +1,4 @@
-import { Capsule, Model } from '../src';
+import { Capsule, Model } from 'guruorm';
 
 // Setup database connection
 const capsule = new Capsule();
@@ -16,11 +16,36 @@ capsule.addConnection({
 capsule.setAsGlobal();
 capsule.bootEloquent();
 
-// Define a model
+/**
+ * GuruORM supports 3 ways to define Model properties:
+ * 
+ * 1. Static properties (cleanest - shown below):
+ *    class User extends Model {
+ *      static table = 'users';
+ *      static fillable = ['name', 'email'];
+ *    }
+ * 
+ * 2. Protected instance properties:
+ *    class User extends Model {
+ *      protected table = 'users';
+ *      protected fillable = ['name', 'email'];
+ *    }
+ * 
+ * 3. Constructor with this:
+ *    class User extends Model {
+ *      constructor() {
+ *        super();
+ *        this.table = 'users';
+ *        this.fillable = ['name', 'email'];
+ *      }
+ *    }
+ */
+
+// Define a model using static properties (cleanest pattern)
 class User extends Model {
-  protected table = 'users';
-  protected fillable = ['name', 'email', 'password'];
-  protected hidden = ['password'];
+  static table = 'users';
+  static fillable = ['name', 'email', 'password'];
+  static hidden = ['password'];
 }
 
 // Example usage
@@ -33,10 +58,31 @@ async function main() {
 
     console.log('Active users:', users);
 
-    // More examples will work once features are fully implemented
+    // Eloquent ORM examples
+    const user = await User.find(1);
+    if (user) {
+      console.log('Found user:', user.name);
+    }
+
+    // Create a new user
+    const newUser = await User.create({
+      name: 'John Doe',
+      email: 'john@example.com',
+      password: 'secret',
+    });
+
+    console.log('Created user:', newUser.name);
+
+    // Update a user
+    newUser.name = 'Jane Doe';
+    await newUser.update();
+
+    console.log('Updated user:', newUser.name);
 
   } catch (error) {
     console.error('Error:', error);
+  } finally {
+    await capsule.disconnect();
   }
 }
 

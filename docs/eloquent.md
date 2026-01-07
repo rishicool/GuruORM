@@ -42,17 +42,53 @@ capsule.bootEloquent();
 
 ## Defining Models
 
-To get started, let's create an Eloquent model. Models typically live in your `models` directory and extend the `Model` class:
+To get started, let's create an Eloquent model. Models typically live in your `models` directory and extend the `Model` class.
 
+GuruORM supports **three ways** to define model properties:
+
+**1. Static Properties (Cleanest - Recommended):**
 ```typescript
 import { Model } from 'guruorm';
 
 class Flight extends Model {
-  // Model configuration will go here
+  static table = 'flights';
+  static fillable = ['name', 'airline'];
+  static casts = { is_active: 'boolean' };
 }
 
 export default Flight;
 ```
+
+**2. Protected Instance Properties (TypeScript Style):**
+```typescript
+import { Model } from 'guruorm';
+
+class Flight extends Model {
+  protected table = 'flights';
+  protected fillable = ['name', 'airline'];
+  protected casts = { is_active: 'boolean' };
+}
+
+export default Flight;
+```
+
+**3. Constructor with this (JavaScript Style):**
+```typescript
+import { Model } from 'guruorm';
+
+class Flight extends Model {
+  constructor() {
+    super();
+    this.table = 'flights';
+    this.fillable = ['name', 'airline'];
+    this.casts = { is_active: 'boolean' };
+  }
+}
+
+export default Flight;
+```
+
+> **Note:** All three patterns are fully supported. For properties like `fillable`, `guarded`, `casts`, `hidden`, `visible`, and `appends`, GuruORM checks **static properties first**, then falls back to instance properties. Choose the pattern that best fits your project's style.
 
 ### Model Conventions
 
@@ -65,34 +101,66 @@ If your model's corresponding database table does not fit this convention, you m
 ```typescript
 import { Model } from 'guruorm';
 
+// Using static property (cleanest)
+class Flight extends Model {
+  static table = 'my_flights';
+}
+
+// Alternative: Using protected property
 class Flight extends Model {
   protected table = 'my_flights';
+}
+
+// Alternative: Using constructor
+class Flight extends Model {
+  constructor() {
+    super();
+    this.table = 'my_flights';
+  }
 }
 ```
 
 #### Primary Keys
 
-Eloquent will assume that each model's corresponding database table has a primary key column named `id`. If necessary, you may define a protected `primaryKey` property on your model to specify a different column that serves as your model's primary key:
+Eloquent will assume that each model's corresponding database table has a primary key column named `id`. If necessary, you may define a `primaryKey` property on your model to specify a different column that serves as your model's primary key:
 
 ```typescript
 import { Model } from 'guruorm';
 
+// Using static property (cleanest)
+class Flight extends Model {
+  static primaryKey = 'flight_id';
+}
+
+// Alternative: Using protected property or constructor
 class Flight extends Model {
   protected primaryKey = 'flight_id';
 }
 ```
 
-In addition, Eloquent assumes that the primary key is an incrementing integer value. If you wish to use a non-incrementing or a non-numeric primary key, you must define a public `incrementing` property on your model that is set to `false`:
+In addition, Eloquent assumes that the primary key is an incrementing integer value. If you wish to use a non-incrementing or a non-numeric primary key, you must define an `incrementing` property on your model that is set to `false`:
 
 ```typescript
+// Using static property (cleanest)
 class Flight extends Model {
-  public incrementing = false;
+  static incrementing = false;
+}
+
+// Alternative: Using protected property or constructor
+class Flight extends Model {
+  protected incrementing = false;
 }
 ```
 
-If your model's primary key is not an integer, you should define a protected `keyType` property on your model. This property should have a value of `'string'`:
+If your model's primary key is not an integer, you should define a `keyType` property on your model. This property should have a value of `'string'`:
 
 ```typescript
+// Using static property (cleanest)
+class Flight extends Model {
+  static keyType = 'string';
+}
+
+// Alternative: Using protected property or constructor
 class Flight extends Model {
   protected keyType = 'string';
 }
@@ -105,8 +173,14 @@ By default, Eloquent expects `created_at` and `updated_at` columns to exist on y
 ```typescript
 import { Model } from 'guruorm';
 
+// Using static property (cleanest)
 class Flight extends Model {
-  public timestamps = false;
+  static timestamps = false;
+}
+
+// Alternative: Using protected property or constructor
+class Flight extends Model {
+  protected timestamps = false;
 }
 ```
 
@@ -126,6 +200,12 @@ By default, all Eloquent models will use the default database connection that is
 ```typescript
 import { Model } from 'guruorm';
 
+// Using static property (cleanest)
+class Flight extends Model {
+  static connection = 'mysql';
+}
+
+// Alternative: Using protected property or constructor
 class Flight extends Model {
   protected connection = 'mysql';
 }
@@ -133,16 +213,17 @@ class Flight extends Model {
 
 #### Default Attribute Values
 
-By default, a newly instantiated model instance will not contain any attribute values. If you would like to define the default values for some of your model's attributes, you may define an `attributes` property on your model:
+By default, a newly instantiated model instance will not contain any attribute values. If you would like to define the default values for some of your model's attributes, you may set them in the constructor after calling `super()`:
 
 ```typescript
 import { Model } from 'guruorm';
 
 class Flight extends Model {
-  protected attributes = {
-    options: '[]',
-    delayed: false,
-  };
+  constructor() {
+    super();
+    this.setAttribute('options', '[]');
+    this.setAttribute('delayed', false);
+  }
 }
 ```
 
@@ -158,7 +239,7 @@ import Flight from './models/Flight';
 const flights = await Flight.all();
 
 for (const flight of flights) {
-  console.log(flight.name);
+  console.log(flight.name); // Direct property access via Proxy
 }
 ```
 
@@ -346,7 +427,7 @@ import Flight from './models/Flight';
 async function store() {
   const flight = new Flight();
   
-  flight.name = 'Sydney to Tokyo';
+  flight.name = 'Sydney to Tokyo'; // Direct property assignment via Proxy
   
   await flight.save();
 }
@@ -375,9 +456,9 @@ import Flight from './models/Flight';
 
 const flight = await Flight.find(1);
 
-flight.name = 'Paris to London';
+flight.name = 'Paris to London'; // Direct property assignment
 
-await flight.save();
+await flight.update(); // or await flight.save()
 ```
 
 #### Mass Updates
@@ -479,8 +560,22 @@ So, to get started, you should define which model attributes you want to make ma
 ```typescript
 import { Model } from 'guruorm';
 
+// Using static property (cleanest)
+class Flight extends Model {
+  static fillable = ['name'];
+}
+
+// Alternative: Using protected property
 class Flight extends Model {
   protected fillable = ['name'];
+}
+
+// Alternative: Using constructor
+class Flight extends Model {
+  constructor() {
+    super();
+    this.fillable = ['name'];
+  }
 }
 ```
 
@@ -501,6 +596,12 @@ flight.fill({ name: 'Amsterdam to Frankfurt' });
 If you would like to make all of your attributes mass assignable, you may define your model's `guarded` property as an empty array:
 
 ```typescript
+// Using static property (cleanest)
+class Flight extends Model {
+  static guarded = [];
+}
+
+// Alternative: Using protected property or constructor
 class Flight extends Model {
   protected guarded = [];
 }
@@ -559,13 +660,15 @@ const deleted = await Flight.where('active', 0).delete();
 
 ### Soft Deleting
 
-In addition to actually removing records from your database, Eloquent can also "soft delete" models. When models are soft deleted, they are not actually removed from your database. Instead, a `deleted_at` attribute is set on the model indicating the date and time at which the model was "deleted". To enable soft deletes for a model, add the `SoftDeletes` trait to the model:
+In addition to actually removing records from your database, Eloquent can also "soft delete" models. When models are soft deleted, they are not actually removed from your database. Instead, a `deleted_at` attribute is set on the model indicating the date and time at which the model was "deleted". To enable soft deletes for a model, extend the `SoftDeleteModel` class:
 
 ```typescript
-import { Model, SoftDeletes } from 'guruorm';
+import { SoftDeleteModel } from 'guruorm';
 
-class Flight extends Model {
-  use = [SoftDeletes];
+class Flight extends SoftDeleteModel {
+  // Model configuration
+  static table = 'flights';
+  static fillable = ['name', 'airline'];
 }
 ```
 
@@ -783,11 +886,31 @@ import { Model } from 'guruorm';
 import UserSaved from './events/UserSaved';
 import UserDeleted from './events/UserDeleted';
 
+// Using static property (cleanest)
+class User extends Model {
+  static dispatchesEvents = {
+    'saved': UserSaved,
+    'deleted': UserDeleted,
+  };
+}
+
+// Alternative: Using protected property
 class User extends Model {
   protected dispatchesEvents = {
     'saved': UserSaved,
     'deleted': UserDeleted,
   };
+}
+
+// Alternative: Using constructor
+class User extends Model {
+  constructor() {
+    super();
+    this.dispatchesEvents = {
+      'saved': UserSaved,
+      'deleted': UserDeleted,
+    };
+  }
 }
 ```
 
@@ -898,8 +1021,9 @@ To define attribute casts, define a `casts` property on your model:
 ```typescript
 import { Model } from 'guruorm';
 
+// Using static property (cleanest)
 class User extends Model {
-  protected casts = {
+  static casts = {
     email_verified_at: 'datetime',
     is_admin: 'boolean',
     options: 'json',
@@ -909,6 +1033,27 @@ class User extends Model {
     score: 'float',
     votes: 'integer',
   };
+}
+
+// Alternative: Using protected property
+class User extends Model {
+  protected casts = {
+    email_verified_at: 'datetime',
+    is_admin: 'boolean',
+    options: 'json',
+  };
+}
+
+// Alternative: Using constructor
+class User extends Model {
+  constructor() {
+    super();
+    this.casts = {
+      email_verified_at: 'datetime',
+      is_admin: 'boolean',
+      options: 'json',
+    };
+  }
 }
 ```
 
@@ -927,8 +1072,9 @@ if (user.is_admin) {
 The `array` and `json` cast types are particularly useful when working with columns that store serialized data:
 
 ```typescript
+// Using static property (cleanest)
 class User extends Model {
-  protected casts = {
+  static casts = {
     options: 'json',
     permissions: 'array',
   };
@@ -954,8 +1100,9 @@ await user.save();
 When casting attributes to `date` or `datetime`, you can access the value as a JavaScript Date object:
 
 ```typescript
+// Using static property (cleanest)
 class User extends Model {
-  protected casts = {
+  static casts = {
     created_at: 'datetime',
     birthday: 'date',
   };
@@ -972,8 +1119,9 @@ console.log(user.created_at.getTime());
 The `decimal` cast requires a precision parameter:
 
 ```typescript
+// Using static property (cleanest)
 class Product extends Model {
-  protected casts = {
+  static casts = {
     price: 'decimal:2',
     tax_rate: 'decimal:4',
   };
@@ -1004,6 +1152,14 @@ Then use it in your model:
 import { Model } from 'guruorm';
 import UpperCaseCast from './casts/UpperCaseCast';
 
+// Using static property (cleanest)
+class User extends Model {
+  static casts = {
+    name: UpperCaseCast,
+  };
+}
+
+// Alternative: Using protected property or constructor
 class User extends Model {
   protected casts = {
     name: UpperCaseCast,
@@ -1020,8 +1176,22 @@ Sometimes you may wish to limit the attributes that are included in your model's
 ```typescript
 import { Model } from 'guruorm';
 
+// Using static property (cleanest)
+class User extends Model {
+  static hidden = ['password', 'remember_token'];
+}
+
+// Alternative: Using protected property
 class User extends Model {
   protected hidden = ['password', 'remember_token'];
+}
+
+// Alternative: Using constructor
+class User extends Model {
+  constructor() {
+    super();
+    this.hidden = ['password', 'remember_token'];
+  }
 }
 ```
 
@@ -1076,6 +1246,12 @@ Alternatively, you may define a `visible` property to define an "allow list" of 
 ```typescript
 import { Model } from 'guruorm';
 
+// Using static property (cleanest)
+class User extends Model {
+  static visible = ['id', 'name', 'email'];
+}
+
+// Alternative: Using protected property or constructor
 class User extends Model {
   protected visible = ['id', 'name', 'email'];
 }
@@ -1100,8 +1276,30 @@ class User extends Model {
 Then add the attribute name to the `appends` property:
 
 ```typescript
+// Using static property (cleanest)
+class User extends Model {
+  static appends = ['full_name'];
+  
+  getFullNameAttribute(): string {
+    return `${this.first_name} ${this.last_name}`;
+  }
+}
+
+// Alternative: Using protected property
 class User extends Model {
   protected appends = ['full_name'];
+  
+  getFullNameAttribute(): string {
+    return `${this.first_name} ${this.last_name}`;
+  }
+}
+
+// Alternative: Using constructor
+class User extends Model {
+  constructor() {
+    super();
+    this.appends = ['full_name'];
+  }
   
   getFullNameAttribute(): string {
     return `${this.first_name} ${this.last_name}`;
