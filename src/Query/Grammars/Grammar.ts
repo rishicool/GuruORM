@@ -204,8 +204,10 @@ export class Grammar {
       return this.compileAggregate(query, columns[0]);
     }
 
+    // Check for distinct flag
+    const distinct = query['distinctFlag'] ? 'distinct ' : '';
     const select = columns.includes('*') ? '*' : this.columnize(columns);
-    return `select ${select}`;
+    return `select ${distinct}${select}`;
   }
 
   /**

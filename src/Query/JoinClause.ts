@@ -67,11 +67,11 @@ export class JoinClause {
     second?: string | null,
     boolean: 'and' | 'or' = 'and',
   ): this {
-    if (operator === null) {
+    if (operator === null || operator === undefined) {
       operator = '=';
     }
 
-    if (second === null && operator) {
+    if ((second === null || second === undefined) && operator) {
       second = operator;
       operator = '=';
     }

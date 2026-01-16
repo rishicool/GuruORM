@@ -28,6 +28,7 @@ export class Builder {
   protected lock: boolean | string = false;
   protected columnAliases: Map<string, string> = new Map(); // Track column aliases
   protected returningColumns: string[] = []; // For RETURNING clause
+  protected distinctFlag: boolean = false; // Track distinct queries
   
   // Bindings for prepared statements
   protected bindings: {
@@ -1106,7 +1107,7 @@ export class Builder {
    * Force the query to only return distinct results
    */
   distinct(): this {
-    this.columns.unshift('distinct');
+    this.distinctFlag = true;
     return this;
   }
 
