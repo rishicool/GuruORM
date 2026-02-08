@@ -18,17 +18,20 @@ export * from './Schema/Blueprint';
 export * from './Eloquent/Model';
 export { Builder as EloquentBuilder } from './Eloquent/Builder';
 export { Collection as EloquentCollection } from './Eloquent/Collection';
-export { Events, EventHandler } from './Eloquent/Events';
-export { Scope, SoftDeletingScope, HasGlobalScopes } from './Eloquent/Scope';
-export { Observer, ObserverRegistry } from './Eloquent/Observer';
+export type { Events, EventHandler } from './Eloquent/Events';
+export type { Scope } from './Eloquent/Scope';
+export { SoftDeletingScope, HasGlobalScopes } from './Eloquent/Scope';
+export type { Observer } from './Eloquent/Observer';
+export { ObserverRegistry } from './Eloquent/Observer';
 
 // Model Concerns
 export { SoftDeleteModel } from './Eloquent/Concerns/SoftDeletes';
 export { HasUuids, UuidModel, HasUlids, UlidModel } from './Eloquent/Concerns/HasUuids';
-export { PrunableModel, MassPrunableModel } from './Eloquent/Concerns/Prunable';
+export type { PrunableModel, MassPrunableModel } from './Eloquent/Concerns/Prunable';
 
 // Custom Casts
-export { CastsAttributes, ArrayCast, JsonCast, EncryptedCast, AsCollectionCast, AsStringableCast } from './Eloquent/Casts/CastsAttributes';
+export type { CastsAttributes } from './Eloquent/Casts/CastsAttributes';
+export { ArrayCast, JsonCast, EncryptedCast, AsCollectionCast, AsStringableCast } from './Eloquent/Casts/CastsAttributes';
 
 // Relations
 export { Relation } from './Eloquent/Relations/Relation';
@@ -46,13 +49,15 @@ export * from './Migrations/Migration';
 export * from './Migrations/Migrator';
 
 export * from './Seeding/Seeder';
-export { Factory, FactoryManager, factory, defineFactory } from './Seeding/Factory';
+export type { Factory } from './Seeding/Factory';
+export { FactoryManager, factory, defineFactory } from './Seeding/Factory';
 
 export * from './Capsule/Manager';
 
 export { Collection } from './Support/Collection';
 export * from './Support/helpers';
-export { QueryLogger, QueryLog, QueryListener } from './Support/QueryLogger';
+export type { QueryLog, QueryListener } from './Support/QueryLogger';
+export { QueryLogger } from './Support/QueryLogger';
 
 // Import Manager for instance creation
 import { Manager } from './Capsule/Manager';
