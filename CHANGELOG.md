@@ -2,6 +2,32 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.0.20] - 2026-02-08
+
+### Fixed
+- **Version Tracking**: Corrected version numbering after 2.0.19 was published to NPM without Git commit
+  - Previous issue: Version 2.0.19 was published to NPM but the version bump was never committed to the Git repository
+  - This caused a mismatch between NPM (2.0.19) and Git (2.0.18)
+  - Skipping 2.0.19 in Git history to maintain consistency
+  - Added `PUBLISH_GUIDE.md` to prevent this issue in the future
+
+### Documentation
+- Added comprehensive publishing guide (`PUBLISH_GUIDE.md`) with:
+  - Proper version publishing workflow
+  - Common mistakes to avoid
+  - Rollback procedures
+  - Automated publishing scripts
+  - Quick reference checklist
+
+## [2.0.19] - 2026-02-07 ⚠️ (Published to NPM only, not in Git)
+
+**Note**: This version was published to NPM but never committed to Git. Please use 2.0.20 or later.
+
+## [2.0.18] - 2026-02-07
+
+### Fixed
+- Major issues with join relations
+
 ## [2.0.9] - 2025-12-30
 
 ### Added
