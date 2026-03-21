@@ -1,4 +1,5 @@
-// @ts-nocheck - Helper functions with intentional type flexibility
+// Helper functions with intentional type flexibility
+import { Collection } from './Collection';
 /**
  * Helper functions - inspired by Laravel and Illuminate
  */
@@ -22,7 +23,8 @@ export function getClassName(obj: any): string {
  */
 export function snakeCase(str: string): string {
   return str
-    .replace(/([A-Z])/g, '_$1')
+    .replace(/([A-Z]+)([A-Z][a-z])/g, '$1_$2')
+    .replace(/([a-z\d])([A-Z])/g, '$1_$2')
     .toLowerCase()
     .replace(/^_/, '');
 }
@@ -110,8 +112,7 @@ export function flatten<T>(array: any[], depth = Infinity): T[] {
 /**
  * Create an array of values by running each element through a callback
  */
-export function collect<T>(items: T[]): import('./Collection').Collection<T> {
-  const { Collection } = require('./Collection');
+export function collect<T>(items: T[]): Collection<T> {
   return new Collection<T>(...items);
 }
 

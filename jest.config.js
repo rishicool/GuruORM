@@ -22,5 +22,9 @@ module.exports = {
   coverageDirectory: 'coverage',
   coverageReporters: ['text', 'lcov', 'html'],
   moduleFileExtensions: ['ts', 'tsx', 'js', 'jsx', 'json', 'node'],
+  // Map .js imports back to .ts source files for ts-jest
+  moduleNameMapper: {
+    '^(.*)\\.js$': '$1',
+  },
   verbose: true,
 };

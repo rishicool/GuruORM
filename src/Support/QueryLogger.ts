@@ -1,10 +1,12 @@
 /**
- * Query logger for tracking database queries
+ * Query logger for tracking database queries.
+ * Uses a configurable ring buffer to prevent unbounded memory growth.
  */
 export class QueryLogger {
   private static enabled = false;
   private static queries: QueryLog[] = [];
   private static listeners: QueryListener[] = [];
+  private static maxSize: number = 1000;
 
   /**
    * Enable query logging
@@ -28,6 +30,25 @@ export class QueryLogger {
   }
 
   /**
+   * Set the maximum number of queries to retain in the log.
+   * Oldest queries are evicted when the limit is reached.
+   */
+  static setMaxSize(size: number): void {
+    this.maxSize = Math.max(1, size);
+    // Trim if current log exceeds new limit
+    while (this.queries.length > this.maxSize) {
+      this.queries.shift();
+    }
+  }
+
+  /**
+   * Get the current max size
+   */
+  static getMaxSize(): number {
+    return this.maxSize;
+  }
+
+  /**
    * Log a query
    */
   static log(sql: string, bindings: any[] = [], time: number = 0, connection: string = 'default'): void {
@@ -43,16 +64,21 @@ export class QueryLogger {
       timestamp: new Date()
     };
 
+    // Evict oldest entry if at capacity
+    if (this.queries.length >= this.maxSize) {
+      this.queries.shift();
+    }
+
     this.queries.push(queryLog);
 
     // Notify listeners
-    this.listeners.forEach(listener => {
+    for (const listener of this.listeners) {
       try {
         listener(queryLog);
       } catch (error) {
         console.error('Query listener error:', error);
       }
-    });
+    }
   }
 
   /**

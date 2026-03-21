@@ -10,6 +10,8 @@ export class Manager {
   protected manager: ConnectionManager;
   protected connections: Map<string, ConnectionConfig> = new Map();
   protected static instance: Manager | null = null;
+  /** Cached default connection — avoids Map lookup on every query */
+  private _defaultConn: ConnectionInterface | null = null;
 
   constructor() {
     this.manager = new ConnectionManager();
@@ -65,9 +67,16 @@ export class Manager {
   }
 
   /**
-   * Get a registered connection instance
+   * Get a registered connection instance.
+   * Hot path — cached for default connection.
    */
   getConnection(name?: string): ConnectionInterface {
+    if (!name || name === 'default') {
+      if (this._defaultConn) return this._defaultConn;
+      const conn = this.manager.connection(name);
+      this._defaultConn = conn;
+      return conn;
+    }
     return this.manager.connection(name);
   }
 
@@ -97,8 +106,6 @@ export class Manager {
         return this.getConnection(name);
       }
     });
-    
-    console.log('Eloquent ORM bootstrapped');
   }
 
   /**
@@ -109,10 +116,14 @@ export class Manager {
   }
 
   /**
-   * Begin a fluent query against a database table (instance method)
+   * Begin a fluent query against a database table (instance method).
+   * Hot path — uses cached connection for default.
    */
   table(table: string, as?: string, connection?: string): any {
-    return this.getConnection(connection).table(table, as);
+    const conn = (!connection || connection === 'default') && this._defaultConn
+      ? this._defaultConn
+      : this.getConnection(connection);
+    return conn.table(table, as);
   }
 
   /**
@@ -123,10 +134,14 @@ export class Manager {
   }
 
   /**
-   * Run a select statement (instance method)
+   * Run a select statement (instance method).
+   * Hot path — skips getConnection overhead for default.
    */
   async select(query: string, bindings: any[] = [], connection?: string): Promise<any[]> {
-    return this.getConnection(connection).select(query, bindings);
+    const conn = (!connection || connection === 'default') && this._defaultConn
+      ? this._defaultConn
+      : this.getConnection(connection);
+    return conn.select(query, bindings);
   }
 
   /**
@@ -179,6 +194,35 @@ export class Manager {
         await this.getConnection(connectionName).disconnect();
       }
     }
+  }
+
+  /**
+   * Begin a database transaction
+   */
+  async beginTransaction(connection?: string): Promise<void> {
+    return this.getConnection(connection).beginTransaction();
+  }
+
+  /**
+   * Commit the active database transaction
+   */
+  async commit(connection?: string): Promise<void> {
+    return this.getConnection(connection).commit();
+  }
+
+  /**
+   * Rollback the active database transaction
+   */
+  async rollback(connection?: string): Promise<void> {
+    return this.getConnection(connection).rollback();
+  }
+
+  /**
+   * Register a query event listener
+   */
+  listen(listener: (query: any) => void): void {
+    const { QueryLogger } = require('../Support/QueryLogger');
+    QueryLogger.listen(listener);
   }
 
   /**
@@ -256,5 +300,21 @@ export class Manager {
    */
   static async disconnect(name?: string): Promise<void> {
     return Manager.getInstance().disconnect(name);
+  }
+
+  /**
+   * Get a raw query expression (instance method)
+   */
+  raw(value: any, connection?: string): any {
+    return this.getConnection(connection).raw(value);
+  }
+
+  /**
+   * Get a raw query expression (static method).
+   * Use for embedding raw SQL in query builder calls:
+   *   DB.table('users').where('votes', '>', DB.raw('?', [100]))
+   */
+  static raw(value: any, connection?: string): any {
+    return Manager.getInstance().raw(value, connection);
   }
 }

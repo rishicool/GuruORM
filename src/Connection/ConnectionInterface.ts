@@ -1,4 +1,16 @@
 /**
+ * Log configuration for customizing debug, warn, error, and deprecation output.
+ * Each handler receives the message string; if omitted, defaults to console output.
+ */
+export interface LogConfig {
+  debug?: (message: string) => void;
+  warn?: (message: string) => void;
+  error?: (message: string) => void;
+  deprecate?: (method: string, alternative: string) => void;
+  enableColors?: boolean;
+}
+
+/**
  * Database connection configuration interface
  */
 export interface ConnectionConfig {
@@ -23,6 +35,50 @@ export interface ConnectionConfig {
     acquireTimeoutMillis?: number;
     idleTimeoutMillis?: number;
   };
+
+  /**
+   * Custom identifier wrapping function.
+   * Called for every identifier (column name, table name) in generated SQL.
+   * Receives the raw value, the default implementation, and optional query context.
+   *
+   * @example
+   * wrapIdentifier: (value, origImpl) => origImpl(value.toUpperCase())
+   */
+  wrapIdentifier?: (value: string, origImpl: (value: string) => string, queryContext?: any) => string;
+
+  /**
+   * Post-process database responses before returning them.
+   * Useful for camelCase conversion, stripping metadata, etc.
+   *
+   * @example
+   * postProcessResponse: (result) => camelCaseKeys(result)
+   */
+  postProcessResponse?: (result: any, queryContext?: any) => any;
+
+  /**
+   * Custom log handlers for debug, warn, error, and deprecation messages.
+   *
+   * @example
+   * log: { warn: (msg) => myLogger.warn(msg), error: (msg) => myLogger.error(msg) }
+   */
+  log?: LogConfig;
+
+  /**
+   * When true, undefined values in insert/update are converted to NULL
+   * instead of the raw DEFAULT keyword.
+   */
+  useNullAsDefault?: boolean;
+
+  /**
+   * PostgreSQL search path (schema search order).
+   */
+  searchPath?: string | string[];
+
+  /**
+   * Timeout in milliseconds for acquiring a connection from the pool.
+   * Defaults to 60000 (60 seconds).
+   */
+  acquireConnectionTimeout?: number;
 }
 
 /**

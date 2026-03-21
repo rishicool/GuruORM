@@ -1,6 +1,6 @@
 import { Builder } from '../../src/Query/Builder';
 import { Connection } from '../../src/Connection/Connection';
-import { Grammar } from '../../src/Query/Grammars/Grammar';
+import { Grammar as MySqlGrammar } from '../../src/Query/Grammars/MySqlGrammar';
 import { Processor } from '../../src/Query/Processors/Processor';
 
 // Mock connection
@@ -45,7 +45,7 @@ class MockConnection extends Connection {
   protected async performRollBack(toLevel: number): Promise<void> {}
   
   protected useDefaultQueryGrammar(): void {
-    this.queryGrammar = new Grammar();
+    this.queryGrammar = new MySqlGrammar();
   }
   
   protected useDefaultSchemaGrammar(): void {}
@@ -59,12 +59,12 @@ class MockConnection extends Connection {
 describe('Query Builder - JOIN clauses', () => {
   let builder: Builder;
   let connection: MockConnection;
-  let grammar: Grammar;
+  let grammar: MySqlGrammar;
   let processor: Processor;
 
   beforeEach(() => {
     connection = new MockConnection();
-    grammar = new Grammar();
+    grammar = new MySqlGrammar();
     processor = new Processor();
     builder = new Builder(connection, grammar, processor);
   });

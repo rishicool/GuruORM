@@ -1,7 +1,8 @@
-import { ConnectionInterface, ConnectionConfig } from './ConnectionInterface';
+import { ConnectionInterface, ConnectionConfig, LogConfig } from './ConnectionInterface';
 import { Expression } from '../Query/Expression';
 import { Builder as QueryBuilder } from '../Query/Builder';
 import { Builder as SchemaBuilder } from '../Schema/Builder';
+import { QueryException } from '../Errors/GuruORMError';
 
 /**
  * Base connection class - inspired by Laravel and Illuminate
@@ -21,11 +22,12 @@ export abstract class Connection implements ConnectionInterface {
   protected loggingQueries = false;
   protected pretend = false;
   protected reconnector: (() => Promise<void>) | null = null;
+  protected logger: ConnectionLogger;
 
   constructor(config: ConnectionConfig) {
     this.config = config;
     this.tablePrefix = config.prefix || '';
-    // Note: useDefault* methods are called by child classes after super()
+    this.logger = new ConnectionLogger(config.log);
   }
 
   /**
@@ -211,10 +213,14 @@ export abstract class Connection implements ConnectionInterface {
   }
 
   /**
-   * Set the query grammar used by the connection
+   * Set the query grammar used by the connection.
+   * Automatically applies the wrapIdentifier config hook when present.
    */
   setQueryGrammar(grammar: any): void {
     this.queryGrammar = grammar;
+    if (this.config.wrapIdentifier && grammar && typeof grammar.setWrapIdentifier === 'function') {
+      grammar.setWrapIdentifier(this.config.wrapIdentifier);
+    }
   }
 
   /**
@@ -382,29 +388,19 @@ export abstract class Connection implements ConnectionInterface {
   }
 
   /**
-   * Handle a query exception with enhanced error details
+   * Handle a query exception with enhanced error details.
+   * Returns a structured QueryException that can be caught
+   * with `instanceof QueryException` and serialized for log pipelines.
    */
-  protected handleQueryException(error: Error, query: string, bindings: any[]): Error {
-    const enhancedError = new Error(error.message);
-    enhancedError.name = 'QueryException';
-    (enhancedError as any).sql = query;
-    (enhancedError as any).bindings = bindings;
-    (enhancedError as any).originalError = error;
-    enhancedError.stack = error.stack;
-    
-    // Log detailed error if logging is enabled
-    if (this.loggingQueries) {
-      console.error('[GuruORM Query Exception]', {
-        message: error.message,
-        sql: query,
-        bindings: bindings,
-        connection: this.name || 'default',
-        driver: this.getDriverName ? this.getDriverName() : 'unknown',
-        stack: error.stack
-      });
-    }
-    
-    return enhancedError;
+  protected handleQueryException(error: Error, query: string, bindings: any[]): QueryException {
+    return new QueryException(
+      error.message,
+      query,
+      bindings,
+      error,
+      this.name || 'default',
+      this.getDriverName ? this.getDriverName() : 'unknown',
+    );
   }
 
   /**
@@ -424,5 +420,70 @@ export abstract class Connection implements ConnectionInterface {
    */
   getReadClient(): any {
     return this.readClient || this.client;
+  }
+
+  /**
+   * Post-process a database response using the configured hook (knex-style).
+   * Falls through to identity if no postProcessResponse is configured.
+   */
+  postProcessResponse(result: any, queryContext?: any): any {
+    if (this.config.postProcessResponse) {
+      return this.config.postProcessResponse(result, queryContext);
+    }
+    return result;
+  }
+
+  /**
+   * Get the connection logger instance.
+   */
+  getLogger(): ConnectionLogger {
+    return this.logger;
+  }
+
+  /**
+   * Whether undefined values should be treated as NULL in insert/update.
+   */
+  useNullAsDefault(): boolean {
+    return this.config.useNullAsDefault === true;
+  }
+}
+
+/**
+ * Connection-level logger — mirrors knex log config.
+ * Delegates to user-supplied handlers or falls back to console.
+ */
+export class ConnectionLogger {
+  private _debug?: (message: string) => void;
+  private _warn?: (message: string) => void;
+  private _error?: (message: string) => void;
+  private _deprecate?: (method: string, alternative: string) => void;
+  private _enableColors: boolean;
+
+  constructor(config?: LogConfig) {
+    this._debug = config?.debug;
+    this._warn = config?.warn;
+    this._error = config?.error;
+    this._deprecate = config?.deprecate;
+    this._enableColors = config?.enableColors ?? (typeof process !== 'undefined' && process.stdout?.isTTY === true);
+  }
+
+  debug(message: string): void {
+    if (this._debug) { this._debug(message); return; }
+    console.log(message);
+  }
+
+  warn(message: string): void {
+    if (this._warn) { this._warn(message); return; }
+    console.warn(this._enableColors ? `\x1b[33m${message}\x1b[0m` : message);
+  }
+
+  error(message: string): void {
+    if (this._error) { this._error(message); return; }
+    console.error(this._enableColors ? `\x1b[31m${message}\x1b[0m` : message);
+  }
+
+  deprecate(method: string, alternative: string): void {
+    if (this._deprecate) { this._deprecate(method, alternative); return; }
+    this.warn(`${method} is deprecated, please use ${alternative}`);
   }
 }

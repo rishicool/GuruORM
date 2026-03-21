@@ -56,7 +56,7 @@ export class SqliteConnection extends Connection {
       const time = Date.now() - startTime;
       this.logQuery(query, bindings, time);
       
-      return rows;
+      return this.postProcessResponse(rows);
     } catch (error) {
       throw this.handleQueryException(error as Error, query, bindings);
     }
@@ -168,17 +168,10 @@ export class SqliteConnection extends Connection {
   }
 
   /**
-   * Handle a query exception
-   */
-  protected handleQueryException(error: Error, query: string, bindings: any[]): Error {
-    return error;
-  }
-
-  /**
    * Set the query grammar to the default implementation
    */
   protected useDefaultQueryGrammar(): void {
-    this.queryGrammar = new QueryGrammar();
+    this.setQueryGrammar(new QueryGrammar());
   }
 
   /**

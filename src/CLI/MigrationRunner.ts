@@ -2,6 +2,7 @@ import { Migrator } from '../Migrations/Migrator';
 import { Manager as Capsule } from '../Capsule/Manager';
 import * as path from 'path';
 import * as fs from 'fs';
+import { getRequire } from '../Support/compat.js';
 
 /**
  * Migration Runner - handles CLI migration commands
@@ -28,7 +29,7 @@ export class MigrationRunner {
     const jsConfigPath = path.join(process.cwd(), 'guruorm.config.js');
     const configPath = fs.existsSync(cjsConfigPath) ? cjsConfigPath : jsConfigPath;
     if (fs.existsSync(configPath)) {
-      return require(configPath);
+      return getRequire()(configPath);
     }
     return null;
   }

@@ -48,6 +48,20 @@ export class PostgresGrammar extends Grammar {
   }
 
   /**
+   * Compile a rename table command (ANSI SQL - works for Postgres)
+   */
+  compileRenameTable(from: string, to: string): string {
+    return `alter table ${this.wrapTable(from)} rename to ${this.wrapTable(to)}`;
+  }
+
+  /**
+   * Compile the query to check if an index exists (Postgres catalog)
+   */
+  compileIndexExists(): string {
+    return 'SELECT 1 FROM pg_indexes WHERE tablename = $1 AND indexname = $2 LIMIT 1';
+  }
+
+  /**
    * Get the SQL type for a column (PostgreSQL-specific)
    */
   protected getType(column: any): string {

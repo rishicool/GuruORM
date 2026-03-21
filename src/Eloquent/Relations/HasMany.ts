@@ -23,19 +23,7 @@ export class HasMany extends Relation {
   addConstraints(): void {
     if (this.parent.modelExists()) {
       this.query.where(this.foreignKey, '=', this.parent.getAttribute(this.localKey));
-      
-      // Automatically apply soft delete constraint if related model uses soft deletes
-      const relatedModel = this.related;
-      const relatedConstructor = relatedModel.constructor as any;
-      const usesSoftDeletes = relatedConstructor.softDeletes === true || 
-                              relatedConstructor.prototype?.softDeletes === true;
-      
-      if (usesSoftDeletes) {
-        const deletedAtColumn = relatedConstructor.deletedAt || 
-                                relatedConstructor.DELETED_AT || 
-                                'deleted_at';
-        this.query.whereNull(deletedAtColumn);
-      }
+      this.applySoftDeleteConstraint();
     }
   }
 
@@ -51,17 +39,7 @@ export class HasMany extends Relation {
       this.query.whereIn(this.foreignKey, keys);
     }
     
-    // Apply soft delete constraint for eager loading too
-    const relatedConstructor = this.related.constructor as any;
-    const usesSoftDeletes = relatedConstructor.softDeletes === true || 
-                            relatedConstructor.prototype?.softDeletes === true;
-    
-    if (usesSoftDeletes) {
-      const deletedAtColumn = relatedConstructor.deletedAt || 
-                              relatedConstructor.DELETED_AT || 
-                              'deleted_at';
-      this.query.whereNull(deletedAtColumn);
-    }
+    this.applySoftDeleteConstraint();
   }
 
   /**
@@ -135,5 +113,42 @@ export class HasMany extends Relation {
     model.setAttribute(this.foreignKey, this.parent.getAttribute(this.localKey));
     await model.save();
     return model;
+  }
+
+  /**
+   * Save multiple related model instances
+   */
+  async saveMany(models: Model[]): Promise<Model[]> {
+    const saved: Model[] = [];
+    for (const model of models) {
+      saved.push(await this.save(model));
+    }
+    return saved;
+  }
+
+  /**
+   * Get the first related record matching the attributes or create it
+   */
+  async firstOrCreate(attributes: Record<string, any>, values: Record<string, any> = {}): Promise<Model> {
+    // Build WHERE conditions directly on the relation query (avoids passing Builder as a value)
+    for (const [key, val] of Object.entries(attributes)) {
+      this.query.where(key, val);
+    }
+    const instance = await this.query.first();
+
+    if (instance) return instance;
+
+    return this.create({ ...attributes, ...values });
+  }
+
+  /**
+   * Get the first related record matching the attributes or instantiate it (no persistence)
+   */
+  firstOrNew(attributes: Record<string, any>, values: Record<string, any> = {}): Model {
+    // This is synchronous — returns an in-memory instance without saving
+    const instance = this.related.newInstance();
+    instance.setAttribute(this.foreignKey, this.parent.getAttribute(this.localKey));
+    instance.forceFill({ ...attributes, ...values });
+    return instance;
   }
 }

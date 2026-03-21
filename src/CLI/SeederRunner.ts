@@ -1,6 +1,7 @@
 import * as path from 'path';
 import * as fs from 'fs';
 import { Manager } from '../Capsule/Manager';
+import { getRequire } from '../Support/compat.js';
 import chalk from 'chalk';
 
 /**
@@ -43,7 +44,7 @@ export class SeederRunner {
     
     try {
       // Load config using require (works for both .cjs and .js in CommonJS context)
-      const config = require(configPath);
+      const config = getRequire()(configPath);
       const manager = new Manager();
       
       // Add all configured connections
@@ -203,6 +204,13 @@ export class SeederRunner {
           continue;
         }
         
+        // Clear seeders tracking table (don't skip it — entries must be reset)
+        if (table === this.seedersTable) {
+          console.log(chalk.gray(`   Clearing tracking: ${table}`));
+          await connection.table(table).delete();
+          continue;
+        }
+        
         console.log(chalk.gray(`   Truncating: ${table}`));
         await connection.table(table).truncate();
       }
@@ -214,8 +222,8 @@ export class SeederRunner {
       console.log(chalk.green('✅ All tables truncated successfully!'));
       console.log('');
       
-      // Run seeders
-      await this.run(options);
+      // Run seeders (force: true since tracking was cleared)
+      await this.run({ ...options, force: true });
       
     } catch (error: any) {
       console.error(chalk.red('❌ Error during refresh:'), error.message);
@@ -349,6 +357,140 @@ export class SeederRunner {
       console.error(chalk.red('❌ Error clearing tables:'), error.message);
       throw error;
     }
+  }
+
+  /**
+   * Show the status of all seeders (which have been run and their batch).
+   * Similar to `php artisan migrate:status` but for seeders.
+   */
+  async status(): Promise<void> {
+    await this.createSeedersTable();
+
+    const connection = this.manager.getConnection();
+
+    // Get all seeder files on disk
+    const filesOnDisk: string[] = [];
+    if (fs.existsSync(this.seedersPath)) {
+      const files = fs.readdirSync(this.seedersPath)
+        .filter(f => f.endsWith('.js'))
+        .sort();
+      for (const f of files) {
+        filesOnDisk.push(f.replace('.js', ''));
+      }
+    }
+
+    // Get all ran seeders from the tracking table
+    const ran = await connection
+      .table(this.seedersTable)
+      .select('seeder', 'batch')
+      .orderBy('batch')
+      .orderBy('seeder')
+      .get();
+
+    const ranMap = new Map<string, number>();
+    for (const r of (ran as any[] || [])) {
+      ranMap.set(r.seeder, r.batch);
+    }
+
+    // Merge: files on disk + any tracked entries that aren't on disk
+    const allNames = new Set<string>([...filesOnDisk, ...ranMap.keys()]);
+    const rows: Array<{ name: string; ran: boolean; batch: number | null; onDisk: boolean }> = [];
+    for (const name of allNames) {
+      rows.push({
+        name,
+        ran: ranMap.has(name),
+        batch: ranMap.get(name) ?? null,
+        onDisk: filesOnDisk.includes(name),
+      });
+    }
+
+    console.log('');
+    console.log(chalk.blue('Seeder Status'));
+    console.log(chalk.gray('─'.repeat(60)));
+    console.log(
+      chalk.gray(' Ran?'.padEnd(8)) +
+      chalk.gray('Batch'.padEnd(8)) +
+      chalk.gray('Seeder')
+    );
+    console.log(chalk.gray('─'.repeat(60)));
+
+    for (const row of rows) {
+      const status = row.ran ? chalk.green(' Yes') : chalk.yellow(' No');
+      const batch = row.ran ? String(row.batch).padEnd(8) : '—'.padEnd(8);
+      const nameDisplay = row.onDisk ? row.name : `${row.name} ${chalk.red('(missing file)')}`;
+      console.log(`${status.padEnd(8)}${batch}${nameDisplay}`);
+    }
+
+    console.log(chalk.gray('─'.repeat(60)));
+    console.log('');
+  }
+
+  /**
+   * Rollback the last batch of seeders — removes their tracking entries
+   * so they can be re-run. Does NOT undo database changes.
+   *
+   * @param options.step  Number of batches to roll back (default 1).
+   */
+  async rollback(options: { step?: number } = {}): Promise<void> {
+    await this.createSeedersTable();
+
+    const steps = options.step || 1;
+    const connection = this.manager.getConnection();
+
+    for (let i = 0; i < steps; i++) {
+      // Get the latest batch number
+      const results = await connection
+        .table(this.seedersTable)
+        .max('batch');
+
+      let maxBatch = 0;
+      if (Array.isArray(results) && results.length > 0) {
+        maxBatch = results[0]?.max || results[0]?.['max(batch)'] || 0;
+      } else if (typeof results === 'object' && results !== null) {
+        maxBatch = (results as any).max || (results as any)['max(batch)'] || 0;
+      } else if (typeof results === 'number') {
+        maxBatch = results;
+      }
+
+      if (!maxBatch || maxBatch < 1) {
+        console.log(chalk.yellow('Nothing to rollback.'));
+        return;
+      }
+
+      // Get seeders in this batch
+      const seeders = await connection
+        .table(this.seedersTable)
+        .where('batch', maxBatch)
+        .get();
+
+      const names = ((seeders as any[]) || []).map((s: any) => s.seeder);
+
+      // Delete the batch entries
+      await connection
+        .table(this.seedersTable)
+        .where('batch', maxBatch)
+        .delete();
+
+      for (const name of names) {
+        console.log(chalk.yellow(`↩️  Rolled back: ${name} (batch ${maxBatch})`));
+      }
+    }
+
+    console.log('');
+    console.log(chalk.green('✅ Rollback complete. Re-run with: guruorm db:seed'));
+  }
+
+  /**
+   * Reset all seeder tracking entries so every seeder can be re-run.
+   * Does NOT modify data tables.
+   */
+  async reset(): Promise<void> {
+    await this.createSeedersTable();
+    const connection = this.manager.getConnection();
+
+    await connection.table(this.seedersTable).delete();
+
+    console.log(chalk.green('✅ Seeder tracking reset. All seeders will run on next db:seed.'));
   }
 
   /**

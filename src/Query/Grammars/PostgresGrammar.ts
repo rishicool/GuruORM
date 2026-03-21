@@ -209,11 +209,88 @@ export class PostgresGrammar extends Grammar {
   }
 
   /**
+   * Compile an "insert or ignore" statement for PostgreSQL.
+   * Uses ON CONFLICT DO NOTHING.
+   */
+  compileInsertOrIgnore(query: any, values: any[]): string {
+    return `${this.compileInsert(query, values)} on conflict do nothing`;
+  }
+
+  /**
+   * Compile an upsert statement for PostgreSQL.
+   * Uses ON CONFLICT (...) DO UPDATE SET ... = excluded....
+   * Resets parameter counter so $N placeholders are correct.
+   */
+  compileUpsert(query: any, values: any[], uniqueBy: string[], update?: string[]): string {
+    this.parameterCounter = 0;
+    return super.compileUpsert(query, values, uniqueBy, update);
+  }
+
+  /**
+   * Compile INSERT with ON CONFLICT for PostgreSQL (fluent onConflict() API).
+   * Also handles literal values object for merge: { col: value }.
+   */
+  compileInsertOnConflict(
+    query: any,
+    values: any[],
+    target: string[] | true | null,
+    action: 'ignore' | 'merge',
+    mergeUpdates: string[] | Record<string, any> | null,
+  ): string {
+    this.parameterCounter = 0;
+    // Bare insert (no RETURNING) so we can append ON CONFLICT before RETURNING
+    const insert = this.compileInsertBase(query, values);
+
+    const targetClause = (target === true || target === null || (Array.isArray(target) && target.length === 0))
+      ? ''
+      : ` (${(target as string[]).map(c => this.wrap(c)).join(', ')})`;
+
+    let sql: string;
+
+    if (action === 'ignore') {
+      sql = `${insert} on conflict${targetClause} do nothing`;
+    } else {
+      // action === 'merge': literal values object binds the values themselves
+      let setClauses: string;
+      if (mergeUpdates && !Array.isArray(mergeUpdates) && typeof mergeUpdates === 'object') {
+        // Literal values: { col: value } — each value is a new binding ($N)
+        setClauses = Object.entries(mergeUpdates)
+          .map(([col, val]) => {
+            if (val !== null && typeof val === 'object' && typeof val.getValue === 'function') {
+              return `${this.wrap(col)} = ${val.getValue()}`;
+            }
+            return `${this.wrap(col)} = ${this.parameter(val)}`;
+          })
+          .join(', ');
+      } else {
+        const cols: string[] = Array.isArray(mergeUpdates) && (mergeUpdates as string[]).length > 0
+          ? mergeUpdates as string[]
+          : Object.keys(values[0]);
+        setClauses = cols.map(col => `${this.wrap(col)} = excluded.${this.wrap(col)}`).join(', ');
+      }
+      sql = `${insert} on conflict${targetClause} do update set ${setClauses}`;
+    }
+
+    // Append RETURNING after ON CONFLICT (correct PostgreSQL order)
+    const returning = query['getReturning'] ? query.getReturning() : [];
+    if (returning && returning.length > 0) {
+      sql += ` returning ${this.columnize(returning)}`;
+    }
+
+    return sql;
+  }
+
+  /**
    * Reset parameter counter before compiling
    */
   compileInsert(query: any, values: any[]): string {
     this.parameterCounter = 0;
     return super.compileInsert(query, values);
+  }
+
+  protected compileInsertBase(query: any, values: any[]): string {
+    // parameterCounter already reset by compileInsertOnConflict before calling this
+    return super.compileInsertBase(query, values);
   }
 
   compileUpdate(query: any, values: any): string {
@@ -288,5 +365,42 @@ export class PostgresGrammar extends Grammar {
     }).join(', ');
 
     return `group by ${compiled}`;
+  }
+
+  /**
+   * Compile a "where year" clause using PostgreSQL EXTRACT.
+   * Base Grammar generates MySQL-style year(col) which doesn't exist in PG.
+   */
+  protected whereYear(query: Builder, where: any): string {
+    const column = this.wrap(where.column);
+    const value = this.parameter(where.value);
+    return `EXTRACT(YEAR FROM ${column}) ${where.operator} ${value}`;
+  }
+
+  /**
+   * Compile a "where month" clause using PostgreSQL EXTRACT.
+   */
+  protected whereMonth(query: Builder, where: any): string {
+    const column = this.wrap(where.column);
+    const value = this.parameter(where.value);
+    return `EXTRACT(MONTH FROM ${column}) ${where.operator} ${value}`;
+  }
+
+  /**
+   * Compile a "where day" clause using PostgreSQL EXTRACT.
+   */
+  protected whereDay(query: Builder, where: any): string {
+    const column = this.wrap(where.column);
+    const value = this.parameter(where.value);
+    return `EXTRACT(DAY FROM ${column}) ${where.operator} ${value}`;
+  }
+
+  /**
+   * Compile a "where time" clause using PostgreSQL time casting.
+   */
+  protected whereTime(query: Builder, where: any): string {
+    const column = this.wrap(where.column);
+    const value = this.parameter(where.value);
+    return `${column}::time ${where.operator} ${value}`;
   }
 }

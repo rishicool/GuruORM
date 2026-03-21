@@ -1,0 +1,97 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = "postgresql://egmnz@localhost:5432/guruorm_bench"
+}
+
+model User {
+  id           Int       @id @default(autoincrement())
+  uuid         String    @db.Uuid
+  name         String    @db.VarChar(120)
+  email        String    @db.VarChar(180)
+  passwordHash String    @map("password_hash") @db.VarChar(255)
+  countryId    Int?      @map("country_id")
+  isActive     Boolean   @default(true) @map("is_active")
+  role         String    @default("customer") @db.VarChar(20)
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt    DateTime  @default(now()) @map("updated_at") @db.Timestamptz
+  deletedAt    DateTime? @map("deleted_at") @db.Timestamptz
+  orders       Order[]
+
+  @@map("users")
+}
+
+model Category {
+  id          Int       @id @default(autoincrement())
+  parentId    Int?      @map("parent_id")
+  name        String    @db.VarChar(100)
+  slug        String    @db.VarChar(100)
+  description String?
+  createdAt   DateTime? @default(now()) @map("created_at") @db.Timestamptz
+  products    Product[]
+
+  @@map("categories")
+}
+
+model Product {
+  id          Int        @id @default(autoincrement())
+  sellerId    Int        @map("seller_id")
+  categoryId  Int        @map("category_id")
+  name        String     @db.VarChar(220)
+  slug        String     @db.VarChar(220)
+  description String?
+  price       Decimal    @db.Decimal(12, 2)
+  cost        Decimal    @default(0) @db.Decimal(12, 2)
+  stockQty    Int        @default(0) @map("stock_qty")
+  sku         String?    @db.VarChar(60)
+  weightKg    Decimal?   @map("weight_kg") @db.Decimal(8, 3)
+  isActive    Boolean    @default(true) @map("is_active")
+  createdAt   DateTime   @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt   DateTime   @default(now()) @map("updated_at") @db.Timestamptz
+  deletedAt   DateTime?  @map("deleted_at") @db.Timestamptz
+  category    Category   @relation(fields: [categoryId], references: [id])
+  orderItems  OrderItem[]
+
+  @@map("products")
+}
+
+model Order {
+  id           Int        @id @default(autoincrement())
+  userId       Int        @map("user_id")
+  addressId    Int?       @map("address_id")
+  status       String     @default("pending") @db.VarChar(20)
+  subtotal     Decimal    @default(0) @db.Decimal(14, 2)
+  tax          Decimal    @default(0) @db.Decimal(14, 2)
+  shippingCost Decimal    @default(0) @map("shipping_cost") @db.Decimal(14, 2)
+  total        Decimal    @default(0) @db.Decimal(14, 2)
+  currency     String     @default("USD") @db.Char(3)
+  notes        String?
+  placedAt     DateTime   @default(now()) @map("placed_at") @db.Timestamptz
+  shippedAt    DateTime?  @map("shipped_at") @db.Timestamptz
+  deliveredAt  DateTime?  @map("delivered_at") @db.Timestamptz
+  cancelledAt  DateTime?  @map("cancelled_at") @db.Timestamptz
+  createdAt    DateTime   @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt    DateTime   @default(now()) @map("updated_at") @db.Timestamptz
+  user         User       @relation(fields: [userId], references: [id])
+  orderItems   OrderItem[]
+
+  @@map("orders")
+}
+
+model OrderItem {
+  id        Int      @id @default(autoincrement())
+  orderId   Int      @map("order_id")
+  productId Int      @map("product_id")
+  quantity  Int
+  unitPrice Decimal  @map("unit_price") @db.Decimal(12, 2)
+  discount  Decimal  @default(0) @db.Decimal(12, 2)
+  lineTotal Decimal  @map("line_total") @db.Decimal(14, 2)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+  order     Order    @relation(fields: [orderId], references: [id])
+  product   Product  @relation(fields: [productId], references: [id])
+
+  @@map("order_items")
+}

@@ -28,6 +28,7 @@ export interface ColumnDefinition {
   
   // Fluent modifier methods
   nullable(): ColumnDefinition;
+  notNullable(): ColumnDefinition;
   defaultTo(value: any): ColumnDefinition;
   defaultRaw(value: string): ColumnDefinition;
   unsigned(): ColumnDefinition;
@@ -97,6 +98,7 @@ export class Blueprint {
 
     // Add fluent modifier methods
     column.nullable = () => { (column as any)._nullable = true; return column; };
+    column.notNullable = () => { (column as any)._nullable = false; return column; };
     column.defaultTo = (value: any) => { (column as any)._default = value; return column; };
     column.unsigned = () => { (column as any)._unsigned = true; return column; };
     column.defaultRaw = (value: string) => { (column as any)._default = { __raw: value }; return column; };
@@ -577,6 +579,17 @@ export class Blueprint {
     this.commands.push({
       type: 'dropColumn',
       columns: columnArray,
+    });
+  }
+
+  /**
+   * Rename a column on the table.
+   */
+  renameColumn(from: string, to: string): void {
+    this.commands.push({
+      type: 'renameColumn',
+      from,
+      to,
     });
   }
 

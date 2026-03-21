@@ -1,0 +1,534 @@
+{
+  "meta": {
+    "hardware": "Apple M1 Pro (10-core), 32 GB RAM, macOS 15.7.4",
+    "database": "PostgreSQL 16.11, local Unix socket",
+    "dataset": "695,349 orders · 100k users · 50k products · ~1.5M order_items",
+    "nodeVersion": "v22.18.0",
+    "versions": {
+      "guruorm": "2.0.20",
+      "knex": "3.1.0",
+      "sequelize": "6.37.8",
+      "drizzle": "0.45.1",
+      "typeorm": "0.3.28",
+      "prisma": "5.22.0",
+      "pg": "8.20.0"
+    },
+    "iterations": 30,
+    "note_sectionA": "All 6 ORMs execute identical SQL strings via their raw-execution API. Measures driver + connection overhead only.",
+    "note_sectionB": "Each ORM uses its own fluent/declarative query builder. Only 5 queries expressible natively by ALL 6 ORMs. CTEs, window functions, EXISTS, correlated subqueries are Section A only (Prisma and Sequelize require raw SQL for these)."
+  },
+  "raw": [
+    {
+      "label": "A1. Simple WHERE + index",
+      "desc": "SELECT 20 active users by country_id (indexed)",
+      "guru": {
+        "med": 0.6,
+        "p95": 0.92,
+        "p99": 1.01
+      },
+      "knex": {
+        "med": 0.63,
+        "p95": 1.18,
+        "p99": 1.7
+      },
+      "seq": {
+        "med": 0.95,
+        "p95": 2.09,
+        "p99": 2.12
+      },
+      "drizzle": {
+        "med": 1.07,
+        "p95": 2.48,
+        "p99": 3.01
+      },
+      "typeorm": {
+        "med": 1.09,
+        "p95": 2.22,
+        "p99": 3.56
+      },
+      "prisma": {
+        "med": 0.95,
+        "p95": 2.58,
+        "p99": 2.81
+      }
+    },
+    {
+      "label": "A2. 4-table JOIN",
+      "desc": "orders → users → order_items → products → categories, 50 rows",
+      "guru": {
+        "med": 3.01,
+        "p95": 8.3,
+        "p99": 9.99
+      },
+      "knex": {
+        "med": 3.66,
+        "p95": 19.47,
+        "p99": 31.28
+      },
+      "seq": {
+        "med": 2.08,
+        "p95": 5.5,
+        "p99": 9.27
+      },
+      "drizzle": {
+        "med": 2.99,
+        "p95": 7.96,
+        "p99": 8.8
+      },
+      "typeorm": {
+        "med": 2.73,
+        "p95": 5.33,
+        "p99": 11.6
+      },
+      "prisma": {
+        "med": 1.75,
+        "p95": 6.98,
+        "p99": 17.03
+      }
+    },
+    {
+      "label": "A3. GROUP BY + HAVING",
+      "desc": "Revenue > $10k per category, delivered orders",
+      "guru": {
+        "med": 519.93,
+        "p95": 573.01,
+        "p99": 597.95
+      },
+      "knex": {
+        "med": 516.43,
+        "p95": 551.91,
+        "p99": 565.23
+      },
+      "seq": {
+        "med": 508.24,
+        "p95": 550.47,
+        "p99": 728.1
+      },
+      "drizzle": {
+        "med": 508.22,
+        "p95": 538.74,
+        "p99": 547.3
+      },
+      "typeorm": {
+        "med": 511.97,
+        "p95": 560.39,
+        "p99": 573.99
+      },
+      "prisma": {
+        "med": 512.06,
+        "p95": 653.27,
+        "p99": 908.66
+      }
+    },
+    {
+      "label": "A4. EXISTS subquery",
+      "desc": "Users who ever ordered from 'Electronics' category",
+      "guru": {
+        "med": 88.1,
+        "p95": 100.49,
+        "p99": 119.51
+      },
+      "knex": {
+        "med": 89.06,
+        "p95": 93.01,
+        "p99": 102.06
+      },
+      "seq": {
+        "med": 89.45,
+        "p95": 93.28,
+        "p99": 96.63
+      },
+      "drizzle": {
+        "med": 87.35,
+        "p95": 92.98,
+        "p99": 122.05
+      },
+      "typeorm": {
+        "med": 87.22,
+        "p95": 93.52,
+        "p99": 100.95
+      },
+      "prisma": {
+        "med": 93.08,
+        "p95": 98.33,
+        "p99": 109.14
+      }
+    },
+    {
+      "label": "A5. ILIKE text search",
+      "desc": "Products containing 'Pro', by price DESC",
+      "guru": {
+        "med": 0.58,
+        "p95": 0.82,
+        "p99": 1.05
+      },
+      "knex": {
+        "med": 0.58,
+        "p95": 0.98,
+        "p99": 1.02
+      },
+      "seq": {
+        "med": 0.63,
+        "p95": 0.86,
+        "p99": 0.93
+      },
+      "drizzle": {
+        "med": 0.7,
+        "p95": 0.9,
+        "p99": 1
+      },
+      "typeorm": {
+        "med": 0.67,
+        "p95": 0.88,
+        "p99": 0.94
+      },
+      "prisma": {
+        "med": 0.66,
+        "p95": 0.99,
+        "p99": 1.04
+      }
+    },
+    {
+      "label": "A6. Window function (CTE)",
+      "desc": "RANK() OVER PARTITION — top-3 products per category",
+      "guru": {
+        "med": 926.71,
+        "p95": 958.34,
+        "p99": 966.71
+      },
+      "knex": {
+        "med": 921.61,
+        "p95": 1120.49,
+        "p99": 1174.94
+      },
+      "seq": {
+        "med": 934.29,
+        "p95": 1015.97,
+        "p99": 1070.6
+      },
+      "drizzle": {
+        "med": 923.51,
+        "p95": 995.92,
+        "p99": 1021.06
+      },
+      "typeorm": {
+        "med": 925.68,
+        "p95": 983.05,
+        "p99": 1005.93
+      },
+      "prisma": {
+        "med": 937.89,
+        "p95": 982.24,
+        "p99": 1135.61
+      }
+    },
+    {
+      "label": "A7. Deep pagination OFFSET",
+      "desc": "OFFSET 50,000 LIMIT 20 ordered by id",
+      "guru": {
+        "med": 5.71,
+        "p95": 10.79,
+        "p99": 11.01
+      },
+      "knex": {
+        "med": 5.49,
+        "p95": 10.39,
+        "p99": 11.28
+      },
+      "seq": {
+        "med": 5.68,
+        "p95": 10.77,
+        "p99": 13.66
+      },
+      "drizzle": {
+        "med": 5.98,
+        "p95": 10.3,
+        "p99": 10.47
+      },
+      "typeorm": {
+        "med": 5.35,
+        "p95": 10.75,
+        "p99": 11.33
+      },
+      "prisma": {
+        "med": 6.74,
+        "p95": 11.79,
+        "p99": 13.68
+      }
+    },
+    {
+      "label": "A8. Single INSERT+RETURNING",
+      "desc": "INSERT one order row, return new id",
+      "guru": {
+        "med": 0.49,
+        "p95": 1.03,
+        "p99": 4.36
+      },
+      "knex": {
+        "med": 0.52,
+        "p95": 1.04,
+        "p99": 5.73
+      },
+      "seq": {
+        "med": 0.56,
+        "p95": 1.38,
+        "p99": 2.64
+      },
+      "drizzle": {
+        "med": 0.57,
+        "p95": 2.19,
+        "p99": 3.98
+      },
+      "typeorm": {
+        "med": 0.58,
+        "p95": 1.05,
+        "p99": 1.12
+      },
+      "prisma": {
+        "med": 0.63,
+        "p95": 1.27,
+        "p99": 2.95
+      }
+    },
+    {
+      "label": "A9. Transaction (2 INSERTs)",
+      "desc": "BEGIN → INSERT order (RETURNING id) → INSERT order_item → COMMIT — all raw SQL",
+      "guru": {
+        "med": 1.82,
+        "p95": 2.42,
+        "p99": 2.51
+      },
+      "knex": {
+        "med": 1.99,
+        "p95": 2.61,
+        "p99": 3.05
+      },
+      "seq": {
+        "med": 2.09,
+        "p95": 3.22,
+        "p99": 3.8
+      },
+      "drizzle": {
+        "med": 3.73,
+        "p95": 6.57,
+        "p99": 7.34
+      },
+      "typeorm": {
+        "med": 2.38,
+        "p95": 7.93,
+        "p99": 8.76
+      },
+      "prisma": {
+        "med": 3.61,
+        "p95": 9.82,
+        "p99": 37.08
+      }
+    },
+    {
+      "label": "A10. Correlated subquery",
+      "desc": "Orders where total > that user's own average order total",
+      "guru": {
+        "med": 1.05,
+        "p95": 1.93,
+        "p99": 2.01
+      },
+      "knex": {
+        "med": 1.24,
+        "p95": 2.56,
+        "p99": 3.51
+      },
+      "seq": {
+        "med": 1.26,
+        "p95": 2.97,
+        "p99": 3.13
+      },
+      "drizzle": {
+        "med": 0.89,
+        "p95": 2.04,
+        "p99": 2.47
+      },
+      "typeorm": {
+        "med": 1.26,
+        "p95": 3.98,
+        "p99": 4.3
+      },
+      "prisma": {
+        "med": 1.41,
+        "p95": 4.21,
+        "p99": 6.08
+      }
+    }
+  ],
+  "orm": [
+    {
+      "label": "B1. Simple WHERE + index",
+      "desc": "Fluent API: 20 active users by country_id",
+      "guru": {
+        "med": 0.9,
+        "p95": 5.58,
+        "p99": 6.15
+      },
+      "knex": {
+        "med": 0.98,
+        "p95": 10.34,
+        "p99": 15.7
+      },
+      "seq": {
+        "med": 1.18,
+        "p95": 2.45,
+        "p99": 4.67
+      },
+      "drizzle": {
+        "med": 1.49,
+        "p95": 9.61,
+        "p99": 10.18
+      },
+      "typeorm": {
+        "med": 1.51,
+        "p95": 6.91,
+        "p99": 8.17
+      },
+      "prisma": {
+        "med": 1.43,
+        "p95": 3.18,
+        "p99": 4.68
+      }
+    },
+    {
+      "label": "B2. Case-insensitive text search",
+      "desc": "Fluent API: products containing 'Pro' in name, by price DESC",
+      "guru": {
+        "med": 1.5,
+        "p95": 3.49,
+        "p99": 3.62
+      },
+      "knex": {
+        "med": 0.97,
+        "p95": 2.46,
+        "p99": 4.87
+      },
+      "seq": {
+        "med": 1.81,
+        "p95": 2.35,
+        "p99": 2.75
+      },
+      "drizzle": {
+        "med": 1.76,
+        "p95": 3.32,
+        "p99": 6.08
+      },
+      "typeorm": {
+        "med": 1.61,
+        "p95": 2.58,
+        "p99": 2.63
+      },
+      "prisma": {
+        "med": 1.9,
+        "p95": 7.58,
+        "p99": 14.46
+      }
+    },
+    {
+      "label": "B3. Pagination (LIMIT + OFFSET)",
+      "desc": "Fluent API: OFFSET 50,000 LIMIT 20 ordered by id",
+      "guru": {
+        "med": 6.3,
+        "p95": 10.44,
+        "p99": 10.99
+      },
+      "knex": {
+        "med": 5.98,
+        "p95": 11.28,
+        "p99": 12.51
+      },
+      "seq": {
+        "med": 5.57,
+        "p95": 10.62,
+        "p99": 13.11
+      },
+      "drizzle": {
+        "med": 5.7,
+        "p95": 10.12,
+        "p99": 11.97
+      },
+      "typeorm": {
+        "med": 5.74,
+        "p95": 9.31,
+        "p99": 9.89
+      },
+      "prisma": {
+        "med": 6.07,
+        "p95": 11,
+        "p99": 11.57
+      }
+    },
+    {
+      "label": "B4. Bulk INSERT 100 rows",
+      "desc": "ORM API: insert 100 order rows in a single call",
+      "guru": {
+        "med": 2.81,
+        "p95": 3.94,
+        "p99": 6.55
+      },
+      "knex": {
+        "med": 3.56,
+        "p95": 4.73,
+        "p99": 8.26
+      },
+      "seq": {
+        "med": 5.22,
+        "p95": 9.08,
+        "p99": 9.91
+      },
+      "drizzle": {
+        "med": 10.17,
+        "p95": 65.35,
+        "p99": 93.11
+      },
+      "typeorm": {
+        "med": 5.42,
+        "p95": 11.36,
+        "p99": 33.51
+      },
+      "prisma": {
+        "med": 15.04,
+        "p95": 27.93,
+        "p99": 28.21
+      }
+    },
+    {
+      "label": "B5. Transaction (2 inserts)",
+      "desc": "ORM API: INSERT order + order_item inside a transaction",
+      "guru": {
+        "med": 2.7,
+        "p95": 3.84,
+        "p99": 4.16
+      },
+      "knex": {
+        "med": 2.88,
+        "p95": 7.56,
+        "p99": 8.38
+      },
+      "seq": {
+        "med": 4.12,
+        "p95": 5.22,
+        "p99": 5.41
+      },
+      "drizzle": {
+        "med": 3.88,
+        "p95": 8.2,
+        "p99": 16.79
+      },
+      "typeorm": {
+        "med": 3.62,
+        "p95": 7.3,
+        "p99": 11.61
+      },
+      "prisma": {
+        "med": 4.3,
+        "p95": 6.58,
+        "p99": 23.84
+      }
+    }
+  ]
+}

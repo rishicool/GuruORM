@@ -7,6 +7,7 @@ import { Expression } from '../Expression';
  */
 export class Grammar {
   protected tablePrefix = '';
+  protected customWrapIdentifier?: (value: string, origImpl: (value: string) => string, queryContext?: any) => string;
 
   /**
    * The grammar table prefix
@@ -29,8 +30,9 @@ export class Grammar {
     if (table instanceof Expression) {
       return this.getValue(table);
     }
-
-    return this.wrap(this.tablePrefix + table);
+    // Avoid string allocation when tablePrefix is empty (common case)
+    const prefixed = this.tablePrefix ? this.tablePrefix + (table as string) : (table as string);
+    return this.wrap(prefixed);
   }
 
   /**
@@ -44,6 +46,12 @@ export class Grammar {
     // Handle non-string values - convert to string
     if (typeof value !== 'string') {
       value = String(value);
+    }
+
+    // Fast path: simple identifier with no dot or space (most column names)
+    // Avoids toLowerCase() allocation, split() array creation, and includes() scan
+    if (value.length > 0 && !value.includes('.') && !value.includes(' ')) {
+      return this.wrapValue(value);
     }
 
     if (value.toLowerCase().includes(' as ')) {
@@ -69,14 +77,28 @@ export class Grammar {
   }
 
   /**
-   * Wrap a single string in keyword identifiers
+   * Set a custom identifier wrapper function (knex-style wrapIdentifier).
+   */
+  setWrapIdentifier(fn: (value: string, origImpl: (value: string) => string, queryContext?: any) => string): void {
+    this.customWrapIdentifier = fn;
+  }
+
+  /**
+   * Wrap a single string in keyword identifiers.
+   * Delegates to the custom wrapIdentifier hook when configured.
    */
   protected wrapValue(value: string): string {
     if (value === '*') {
       return value;
     }
 
-    return `"${value.replace(/"/g, '""')}"`;
+    const origImpl = (v: string) => `"${v.replace(/"/g, '""')}"`;
+
+    if (this.customWrapIdentifier) {
+      return this.customWrapIdentifier(value, origImpl);
+    }
+
+    return origImpl(value);
   }
 
   /**
@@ -108,6 +130,22 @@ export class Grammar {
   }
 
   /**
+   * Static component map — avoids object + Object.keys allocation on every query.
+   */
+  protected static readonly selectComponents: [string, string][] = [
+    ['compileColumns',  'columns'],
+    ['compileFrom',     'fromTable'],
+    ['compileJoins',    'joins'],
+    ['compileWheres',   'wheres'],
+    ['compileGroups',   'groups'],
+    ['compileHavings',  'havings'],
+    ['compileOrders',   'orders'],
+    ['compileLimit',    'limitValue'],
+    ['compileOffset',   'offsetValue'],
+    ['compileLock',     'lock'],
+  ];
+
+  /**
    * Compile a select query into SQL
    */
   compileSelect(query: Builder): string {
@@ -122,35 +160,13 @@ export class Grammar {
 
     const sql: string[] = [];
 
-    // Component to property mapping
-    const componentMap: { [key: string]: string } = {
-      columns: "columns",
-      from: "fromTable",
-      joins: "joins",
-      wheres: "wheres",
-      groups: "groups",
-      havings: "havings",
-      orders: "orders",
-      limit: "limitValue",
-      offset: "offsetValue",
-      lock: "lock",
-    };
-
-    // Compile each component of the query
-    const components = Object.keys(componentMap);
-
-    components.forEach((component) => {
-      const propertyName = componentMap[component];
-      const method = `compile${component.charAt(0).toUpperCase() + component.slice(1)}`;
-      
-      if (typeof (this as any)[method] === "function") {
-        const value = query[propertyName as keyof Builder];
-        const compiled = (this as any)[method](query, value);
-        if (compiled) {
-          sql.push(compiled);
-        }
+    for (const [method, prop] of (this.constructor as typeof Grammar).selectComponents) {
+      const value = query[prop as keyof Builder];
+      const compiled = (this as any)[method](query, value);
+      if (compiled) {
+        sql.push(compiled);
       }
-    });
+    }
 
     return sql.join(" ");
   }
@@ -347,7 +363,7 @@ export class Grammar {
   protected whereNotIn(query: Builder, where: any): string {
     // Check if values is a subquery (Builder instance)
     if (where.values && typeof where.values === 'object' && typeof where.values.toSql === 'function') {
-      return this.whereInSub(query, where);
+      return this.whereNotInSub(query, where);
     }
     // Ensure values is always an array
     const valuesArray = Array.isArray(where.values) ? where.values : [where.values];
@@ -581,9 +597,16 @@ export class Grammar {
       return '';
     }
 
-    const columns = this.columnize(Object.keys(values[0]));
+    // Extract keys once to avoid repeated Object.keys/values per row
+    const keys = Object.keys(values[0]);
+    const columns = this.columnize(keys);
+    const colCount = keys.length;
     const parameters = values
-      .map((record) => `(${this.parameterize(Object.values(record))})`)
+      .map(() => {
+        const params: string[] = new Array(colCount);
+        for (let i = 0; i < colCount; i++) params[i] = this.parameter();
+        return `(${params.join(', ')})`;
+      })
       .join(', ');
 
     let sql = `insert into ${table} (${columns}) values ${parameters}`;
@@ -595,6 +618,26 @@ export class Grammar {
     }
     
     return sql;
+  }
+
+  /**
+   * Compile a bare INSERT without a RETURNING clause (used internally so that
+   * ON CONFLICT can be injected before RETURNING).
+   */
+  protected compileInsertBase(query: Builder, values: any[]): string {
+    const table = this.wrapTable(query['fromTable'] || '');
+    const columns = this.columnize(Object.keys(values[0]));
+    const colCount = Object.keys(values[0]).length;
+
+    const parameters = values
+      .map(() => {
+        const params: string[] = new Array(colCount);
+        for (let i = 0; i < colCount; i++) params[i] = this.parameter();
+        return `(${params.join(', ')})`;
+      })
+      .join(', ');
+
+    return `insert into ${table} (${columns}) values ${parameters}`;
   }
 
   /**
@@ -633,7 +676,16 @@ export class Grammar {
    * Prepare the bindings for an insert statement
    */
   prepareBindingsForInsert(bindings: any, values: any[]): any[] {
-    return values.flatMap((record) => Object.values(record));
+    // Pre-allocate result array to avoid intermediate arrays from flatMap
+    const keys = Object.keys(values[0]);
+    const result = new Array(values.length * keys.length);
+    let i = 0;
+    for (const record of values) {
+      for (const k of keys) {
+        result[i++] = record[k];
+      }
+    }
+    return result;
   }
 
   /**
@@ -737,6 +789,60 @@ export class Grammar {
     const uniqueColumns = uniqueBy.map(col => this.wrap(col)).join(', ');
 
     return `${insert} on conflict (${uniqueColumns}) do update set ${updateClause}`;
+  }
+
+  /**
+   * Compile an INSERT with ON CONFLICT clause (fluent onConflict() API).
+   * Base Grammar implementation — dialects should override as needed.
+   *
+   * @param query          The builder instance
+   * @param values         Rows to insert
+   * @param target         Conflict target: string[] of columns, or true (no target)
+   * @param action         'ignore' | 'merge'
+   * @param mergeUpdates   undefined = all columns, string[] = those columns, object = literal values
+   */
+  compileInsertOnConflict(
+    query: Builder,
+    values: any[],
+    target: string[] | true | null,
+    action: 'ignore' | 'merge',
+    mergeUpdates: string[] | Record<string, any> | null,
+  ): string {
+    // Use the bare insert (no RETURNING) so we can place ON CONFLICT before RETURNING
+    const insert = this.compileInsertBase(query, values);
+
+    // Build conflict target clause
+    const targetClause = (target === true || target === null || (Array.isArray(target) && target.length === 0))
+      ? ''
+      : ` (${(target as string[]).map(c => this.wrap(c)).join(', ')})`;
+
+    let sql: string;
+
+    if (action === 'ignore') {
+      sql = `${insert} on conflict${targetClause} do nothing`;
+    } else {
+      // action === 'merge'
+      let setClauses: string;
+      if (mergeUpdates && !Array.isArray(mergeUpdates) && typeof mergeUpdates === 'object') {
+        setClauses = Object.entries(mergeUpdates)
+          .map(([col]) => `${this.wrap(col)} = excluded.${this.wrap(col)}`)
+          .join(', ');
+      } else {
+        const cols: string[] = Array.isArray(mergeUpdates) && mergeUpdates.length > 0
+          ? mergeUpdates as string[]
+          : Object.keys(values[0]);
+        setClauses = cols.map(col => `${this.wrap(col)} = excluded.${this.wrap(col)}`).join(', ');
+      }
+      sql = `${insert} on conflict${targetClause} do update set ${setClauses}`;
+    }
+
+    // Append RETURNING after ON CONFLICT (correct SQL order)
+    const returning = query['getReturning']();
+    if (returning && returning.length > 0) {
+      sql += ` returning ${this.columnize(returning)}`;
+    }
+
+    return sql;
   }
 
   /**

@@ -218,6 +218,127 @@ export abstract class Relation {
     return this.query.count();
   }
 
+  async sum(column: string): Promise<number> {
+    return this.query.sum(column);
+  }
+
+  async avg(column: string): Promise<number> {
+    return this.query.avg(column);
+  }
+
+  async min(column: string): Promise<number> {
+    return this.query.min(column);
+  }
+
+  async max(column: string): Promise<number> {
+    return this.query.max(column);
+  }
+
+  /**
+   * Whether soft-deleted related models should be included.
+   */
+  protected _withTrashed = false;
+
+  /**
+   * Whether to return ONLY soft-deleted related models.
+   */
+  protected _onlyTrashed = false;
+
+  /**
+   * Include soft-deleted records in the relationship results.
+   * Use in eager-load callbacks:
+   *   User.with({ posts: (q, rel) => rel.withTrashed() })
+   * Or chain directly on a relation method:
+   *   this.hasMany(Post).withTrashed()
+   */
+  withTrashed(): this {
+    this._withTrashed = true;
+    this._onlyTrashed = false;
+    this.removeSoftDeleteWhereNull();
+    return this;
+  }
+
+  /**
+   * Return only soft-deleted records in the relationship results.
+   */
+  onlyTrashed(): this {
+    this._onlyTrashed = true;
+    this._withTrashed = false;
+    this.removeSoftDeleteWhereNull();
+    // Add whereNotNull for deleted_at
+    const column = this.getSoftDeleteColumn();
+    if (column) {
+      this.query.whereNotNull(column);
+    }
+    return this;
+  }
+
+  /**
+   * Exclude soft-deleted records (default behaviour).
+   */
+  withoutTrashed(): this {
+    this._withTrashed = false;
+    this._onlyTrashed = false;
+    return this;
+  }
+
+  /**
+   * Get the soft-delete column name (table-qualified when appropriate).
+   * Returns null if the related model does not use soft deletes.
+   */
+  protected getSoftDeleteColumn(tablePrefix?: string): string | null {
+    const relatedConstructor = this.related.constructor as any;
+    const usesSoftDeletes = relatedConstructor.softDeletes === true ||
+                            relatedConstructor.prototype?.softDeletes === true;
+    if (!usesSoftDeletes) return null;
+
+    const deletedAtColumn = relatedConstructor.deletedAt ||
+                            relatedConstructor.DELETED_AT ||
+                            'deleted_at';
+    return tablePrefix ? `${tablePrefix}.${deletedAtColumn}` : deletedAtColumn;
+  }
+
+  /**
+   * Remove any existing soft-delete whereNull from the underlying query builder
+   * so that withTrashed/onlyTrashed can override the constraint added by
+   * applySoftDeleteConstraint().
+   */
+  private removeSoftDeleteWhereNull(): void {
+    const column = this.getSoftDeleteColumn();
+    const qualifiedColumn = this.getSoftDeleteColumn(
+      (this as any).table ? this.related.getTable() : undefined
+    );
+    if (!column) return;
+
+    // Access the underlying Query Builder's wheres array
+    const qb = (this.query as any).query || this.query;
+    if (!qb || !Array.isArray(qb.wheres)) return;
+
+    qb.wheres = qb.wheres.filter((w: any) => {
+      if (w.type !== 'Null') return true;
+      // Remove if column matches (with or without table prefix)
+      return w.column !== column && w.column !== qualifiedColumn;
+    });
+  }
+
+  /**
+   * Apply soft delete constraint on the related model if it uses soft deletes.
+   * Accepts an optional table prefix for table-qualified column names
+   * (needed for joins in BelongsToMany, HasOneThrough, HasManyThrough).
+   *
+   * Respects withTrashed() / onlyTrashed() flags — if either has been called,
+   * the default whereNull constraint is suppressed.
+   */
+  protected applySoftDeleteConstraint(tablePrefix?: string): void {
+    // Skip if withTrashed or onlyTrashed has been explicitly requested
+    if (this._withTrashed || this._onlyTrashed) return;
+
+    const column = this.getSoftDeleteColumn(tablePrefix);
+    if (column) {
+      this.query.whereNull(column);
+    }
+  }
+
   /**
    * Make the relation thenable so it can be awaited directly
    */

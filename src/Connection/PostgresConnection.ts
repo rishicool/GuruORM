@@ -1,4 +1,4 @@
-import { Pool } from 'pg';
+import { Pool, PoolClient } from 'pg';
 import { Connection } from './Connection';
 import { ConnectionConfig } from './ConnectionInterface';
 import { PostgresGrammar } from '../Query/Grammars/PostgresGrammar';
@@ -10,6 +10,12 @@ import { Processor } from '../Query/Processors/Processor';
  */
 export class PostgresConnection extends Connection {
   protected pool: Pool | null = null;
+  /** Cached flag: true only when user supplied a postProcessResponse hook */
+  private _hasPostProcess: boolean;
+  /** Cached read client — avoids the || fallback on every query */
+  private _readPool: Pool;
+  /** Dedicated client checked out for the duration of a transaction */
+  private _txClient: PoolClient | null = null;
 
   constructor(config: ConnectionConfig) {
     super(config);
@@ -32,6 +38,8 @@ export class PostgresConnection extends Connection {
     });
 
     this.client = this.pool;
+    this._hasPostProcess = typeof this.config.postProcessResponse === 'function';
+    this._readPool = (this.readClient || this.pool) as Pool;
   }
 
   /**
@@ -43,30 +51,33 @@ export class PostgresConnection extends Connection {
   }
 
   /**
-   * Convert ? placeholders to PostgreSQL $1, $2, etc format
+   * Convert ? placeholders to PostgreSQL $1, $2, etc format.
+   * Fast-path: returns the input unchanged when there are no ? chars.
    */
   protected convertBindings(query: string): string {
+    if (query.indexOf('?') === -1) return query;
     let index = 0;
     return query.replace(/\?/g, () => `$${++index}`);
   }
 
   /**
-   * Run a select statement against the database
+   * Run a select statement against the database.
+   * Hot path — every micro-second counts here.
    */
   async select(query: string, bindings: any[] = [], useReadPdo = true): Promise<any[]> {
-    const startTime = Date.now();
-    
-    // Convert ? to $1, $2, etc for PostgreSQL
-    const pgQuery = this.convertBindings(query);
+    const pgQuery = query.indexOf('?') === -1 ? query : this.convertBindings(query);
     
     try {
-      const connection = useReadPdo ? this.getReadClient() : this.getClient();
+      const connection = this._txClient || (useReadPdo ? this._readPool : this.pool!);
       const result = await connection.query(pgQuery, bindings);
       
-      const time = Date.now() - startTime;
-      this.logQuery(pgQuery, bindings, time);
+      if (this.loggingQueries) {
+        this.queryLog.push({ query: pgQuery, bindings, time: 0 });
+      }
       
-      return result.rows;
+      return this._hasPostProcess
+        ? this.config.postProcessResponse!(result.rows)
+        : result.rows;
     } catch (error) {
       throw this.handleQueryException(error as Error, pgQuery, bindings);
     }
@@ -97,16 +108,14 @@ export class PostgresConnection extends Connection {
    * Execute an SQL statement and return the boolean result
    */
   async statement(query: string, bindings: any[] = []): Promise<boolean> {
-    const startTime = Date.now();
-    
-    // Convert ? to $1, $2, etc for PostgreSQL
-    const pgQuery = this.convertBindings(query);
+    const pgQuery = query.indexOf('?') === -1 ? query : this.convertBindings(query);
     
     try {
-      await this.getClient().query(pgQuery, bindings);
+      await (this._txClient || this.pool!).query(pgQuery, bindings);
       
-      const time = Date.now() - startTime;
-      this.logQuery(pgQuery, bindings, time);
+      if (this.loggingQueries) {
+        this.queryLog.push({ query: pgQuery, bindings, time: 0 });
+      }
       
       return true;
     } catch (error) {
@@ -118,16 +127,14 @@ export class PostgresConnection extends Connection {
    * Run an SQL statement and get the number of rows affected
    */
   async affectingStatement(query: string, bindings: any[] = []): Promise<number> {
-    const startTime = Date.now();
-    
-    // Convert ? to $1, $2, etc for PostgreSQL
-    const pgQuery = this.convertBindings(query);
+    const pgQuery = query.indexOf('?') === -1 ? query : this.convertBindings(query);
     
     try {
-      const result = await this.getClient().query(pgQuery, bindings);
+      const result = await (this._txClient || this.pool!).query(pgQuery, bindings);
       
-      const time = Date.now() - startTime;
-      this.logQuery(pgQuery, bindings, time);
+      if (this.loggingQueries) {
+        this.queryLog.push({ query: pgQuery, bindings, time: 0 });
+      }
       
       return result.rowCount || 0;
     } catch (error) {
@@ -136,17 +143,12 @@ export class PostgresConnection extends Connection {
   }
 
   /**
-   * Run a raw, unprepared query against the database
+   * Run a raw, unprepared query against the database.
+   * Used for BEGIN / COMMIT / ROLLBACK — must be as fast as possible.
    */
   async unprepared(query: string): Promise<boolean> {
-    const startTime = Date.now();
-    
     try {
-      await this.getClient().query(query);
-      
-      const time = Date.now() - startTime;
-      this.logQuery(query, [], time);
-      
+      await (this._txClient || this.pool!).query(query);
       return true;
     } catch (error) {
       throw this.handleQueryException(error as Error, query, []);
@@ -154,32 +156,39 @@ export class PostgresConnection extends Connection {
   }
 
   /**
-   * Create a transaction within the database
+   * Create a transaction — checks out a dedicated client from the pool.
+   * All queries inside the transaction use this client.
    */
   protected async createTransaction(): Promise<void> {
     if (this.transactions === 0) {
-      await this.unprepared('BEGIN');
+      this._txClient = await this.pool!.connect();
+      await this._txClient.query('BEGIN');
     } else {
-      // Create savepoint for nested transaction
-      await this.unprepared(`SAVEPOINT sp${this.transactions + 1}`);
+      await this._txClient!.query(`SAVEPOINT sp${this.transactions + 1}`);
     }
   }
 
   /**
-   * Perform a commit on the database
+   * Perform a commit and release the dedicated client back to the pool.
    */
   protected async performCommit(): Promise<void> {
-    await this.unprepared('COMMIT');
+    const client = this._txClient!;
+    this._txClient = null;
+    await client.query('COMMIT');
+    client.release();
   }
 
   /**
-   * Perform a rollback on the database
+   * Perform a rollback — release the client on full rollback.
    */
   protected async performRollBack(toLevel: number): Promise<void> {
     if (toLevel === 0) {
-      await this.unprepared('ROLLBACK');
+      const client = this._txClient!;
+      this._txClient = null;
+      await client.query('ROLLBACK');
+      client.release();
     } else {
-      await this.unprepared(`ROLLBACK TO SAVEPOINT sp${toLevel + 1}`);
+      await this._txClient!.query(`ROLLBACK TO SAVEPOINT sp${toLevel + 1}`);
     }
   }
 
@@ -187,7 +196,7 @@ export class PostgresConnection extends Connection {
    * Set the query grammar to the default implementation
    */
   protected useDefaultQueryGrammar(): void {
-    this.queryGrammar = new PostgresGrammar();
+    this.setQueryGrammar(new PostgresGrammar());
   }
 
   /**

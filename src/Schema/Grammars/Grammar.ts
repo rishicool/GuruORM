@@ -27,6 +27,15 @@ export class Grammar {
   }
 
   /**
+   * Escape a string value for safe SQL interpolation.
+   * Prevents SQL injection in DDL contexts where parameterized
+   * queries cannot be used (comments, enum values, etc.).
+   */
+  protected escapeString(value: string): string {
+    return value.replace(/\\/g, '\\\\').replace(/'/g, "''");
+  }
+
+  /**
    * Wrap a value in keyword identifiers
    */
   wrap(value: string): string {
@@ -69,7 +78,7 @@ export class Grammar {
    * Compile a rename table command
    */
   compileRenameTable(from: string, to: string): string {
-    return `rename table ${this.wrapTable(from)} to ${this.wrapTable(to)}`;
+    return `alter table ${this.wrapTable(from)} rename to ${this.wrapTable(to)}`;
   }
 
   /**
@@ -84,6 +93,14 @@ export class Grammar {
    */
   compileDisableForeignKeyConstraints(): string {
     return 'SET FOREIGN_KEY_CHECKS=0;';
+  }
+
+  /**
+   * Compile the query to check if an index exists on a table.
+   * Default: MySQL information_schema. Override in dialect grammars for Postgres/SQLite.
+   */
+  compileIndexExists(): string {
+    return 'SELECT 1 FROM information_schema.statistics WHERE table_name = ? AND index_name = ? LIMIT 1';
   }
 
   /**
@@ -106,23 +123,6 @@ export class Grammar {
   compileCreateTable(table: string, columns: string[], options: any = {}): string {
     const columnDefinitions = columns.join(', ');
     let sql = `create table ${this.wrapTable(table)} (${columnDefinitions})`;
-    
-    if (options.engine) {
-      sql += ` engine = ${options.engine}`;
-    }
-    
-    if (options.charset) {
-      sql += ` default charset = ${options.charset}`;
-    }
-    
-    if (options.collation) {
-      sql += ` collate = ${options.collation}`;
-    }
-    
-    if (options.comment) {
-      sql += ` comment = '${options.comment}'`;
-    }
-    
     return sql;
   }
 
@@ -190,7 +190,7 @@ export class Grammar {
     }
 
     if (comment) {
-      sql += ` comment '${comment}'`;
+      sql += ` comment '${this.escapeString(comment)}'`;
     }
 
     return sql;
@@ -254,7 +254,7 @@ export class Grammar {
       case 'binary':
         return 'blob';
       case 'enum':
-        return `enum(${column.allowed.map((v: string) => `'${v}'`).join(', ')})`;
+        return `enum(${column.allowed.map((v: string) => `'${this.escapeString(v)}'`).join(', ')})`;
       case 'json':
         return 'json';
       default:

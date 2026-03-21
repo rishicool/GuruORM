@@ -12,6 +12,12 @@ export class BelongsToMany extends Relation {
   protected relatedPivotKey: string;
   protected parentKey: string;
   protected relatedKey: string;
+  private joinApplied = false;
+  protected pivotColumns: string[] = [];
+  protected pivotWheres: Array<{ column: string; operator: string; value: any }> = [];
+  protected pivotWhereIns: Array<{ column: string; values: any[] }> = [];
+  protected withTimestampsFlag = false;
+  protected pivotAccessor = 'pivot';
 
   constructor(
     query: Builder,
@@ -41,23 +47,18 @@ export class BelongsToMany extends Relation {
       this.addWhereConstraints();
     }
     
-    // Apply soft delete constraint
-    const relatedConstructor = this.related.constructor as any;
-    const usesSoftDeletes = relatedConstructor.softDeletes === true || 
-                            relatedConstructor.prototype?.softDeletes === true;
-    
-    if (usesSoftDeletes) {
-      const deletedAtColumn = relatedConstructor.deletedAt || 
-                              relatedConstructor.DELETED_AT || 
-                              'deleted_at';
-      this.query.whereNull(`${this.related.getTable()}.${deletedAtColumn}`);
-    }
+    this.applySoftDeleteConstraint(this.related.getTable());
+    this.applyPivotWheres();
   }
 
   /**
-   * Set the join clause for the relation query
+   * Set the join clause for the relation query.
+   * Guarded against being called multiple times (e.g. addConstraints + addEagerConstraints).
    */
   protected performJoin(): void {
+    if (this.joinApplied) return;
+    this.joinApplied = true;
+
     const baseTable = this.related.getTable();
     const key = `${baseTable}.${this.relatedKey}`;
 
@@ -69,8 +70,27 @@ export class BelongsToMany extends Relation {
       key
     );
     
-    // Select the related model's columns
-    this.query.select(`${baseTable}.*`);
+    // Select the related model's columns plus pivot keys and extra columns
+    const extraPivot = (this.pivotColumns || []);
+    const selectColumns = [
+      `${baseTable}.*`,
+      `${this.table}.${this.foreignPivotKey}`,
+      `${this.table}.${this.relatedPivotKey}`,
+      ...extraPivot.map(col => `${this.table}.${col}`)
+    ];
+    this.query.select(...selectColumns);
+  }
+
+  /**
+   * Apply pivot-specific where clauses
+   */
+  protected applyPivotWheres(): void {
+    for (const pw of (this.pivotWheres || [])) {
+      this.query.where(`${this.table}.${pw.column}`, pw.operator, pw.value);
+    }
+    for (const pwi of (this.pivotWhereIns || [])) {
+      this.query.whereIn(`${this.table}.${pwi.column}`, pwi.values);
+    }
   }
 
   /**
@@ -90,26 +110,24 @@ export class BelongsToMany extends Relation {
   addEagerConstraints(models: Model[]): void {
     const keys = models.map(model => model.getAttribute(this.parentKey));
     
+    // Ensure join is applied (performJoin has a guard against double application)
+    this.performJoin();
+
     // Select related model columns and pivot columns
-    this.query.select(`${this.related.getTable()}.*`, `${this.table}.${this.foreignPivotKey}`, `${this.table}.${this.relatedPivotKey}`);
-    
-    // Add join for pivot table
-    this.query.join(this.table, `${this.related.getTable()}.${this.relatedKey}`, '=', `${this.table}.${this.relatedPivotKey}`);
-    
+    const extraPivotCols = (this.pivotColumns || []);
+    const selectColumns = [
+      `${this.related.getTable()}.*`,
+      `${this.table}.${this.foreignPivotKey}`,
+      `${this.table}.${this.relatedPivotKey}`,
+      ...extraPivotCols.map(col => `${this.table}.${col}`)
+    ];
+    this.query.select(...selectColumns);
+
     // Filter by parent keys
     this.query.whereIn(`${this.table}.${this.foreignPivotKey}`, keys);
     
-    // Apply soft delete constraint for eager loading
-    const relatedConstructor = this.related.constructor as any;
-    const usesSoftDeletes = relatedConstructor.softDeletes === true || 
-                            relatedConstructor.prototype?.softDeletes === true;
-    
-    if (usesSoftDeletes) {
-      const deletedAtColumn = relatedConstructor.deletedAt || 
-                              relatedConstructor.DELETED_AT || 
-                              'deleted_at';
-      this.query.whereNull(`${this.related.getTable()}.${deletedAtColumn}`);
-    }
+    this.applySoftDeleteConstraint(this.related.getTable());
+    this.applyPivotWheres();
   }
 
   /**
@@ -117,7 +135,7 @@ export class BelongsToMany extends Relation {
    */
   initRelation(models: Model[], relation: string): Model[] {
     for (const model of models) {
-      model['relations'][relation] = new Collection([]);
+      model['relations'][relation] = new Collection();
     }
     return models;
   }
@@ -161,17 +179,14 @@ export class BelongsToMany extends Relation {
   async attach(id: any, attributes: Record<string, any> = {}): Promise<void> {
     const records = this.formatAttachRecords([id], attributes);
     
-    await this.query.getQuery()
-      .from(this.table)
-      .insert(records);
+    await this.newPivotQuery().insert(records);
   }
 
   /**
    * Detach models from the relationship
    */
   async detach(ids?: any[]): Promise<number> {
-    const query = this.query.getQuery()
-      .from(this.table)
+    const query = this.newPivotQuery()
       .where(this.foreignPivotKey, this.parent.getAttribute(this.parentKey));
 
     if (ids) {
@@ -249,8 +264,7 @@ export class BelongsToMany extends Relation {
    * Get the current IDs from the pivot table
    */
   protected async getCurrentIds(): Promise<any[]> {
-    const results: any[] = await this.query.getQuery()
-      .from(this.table)
+    const results: any[] = await this.newPivotQuery()
       .where(this.foreignPivotKey, this.parent.getAttribute(this.parentKey))
       .select([this.relatedPivotKey])
       .get();
@@ -264,19 +278,135 @@ export class BelongsToMany extends Relation {
   protected async attachNew(ids: any[]): Promise<void> {
     const records = this.formatAttachRecords(ids, {});
     
-    await this.query.getQuery()
-      .from(this.table)
-      .insert(records);
+    await this.newPivotQuery().insert(records);
   }
 
   /**
    * Format the attach records
    */
   protected formatAttachRecords(ids: any[], attributes: Record<string, any>): any[] {
+    const record: Record<string, any> = {
+      ...attributes
+    };
+
+    // Add timestamps if enabled
+    if (this.withTimestampsFlag) {
+      const now = new Date();
+      record['created_at'] = now;
+      record['updated_at'] = now;
+    }
+
     return ids.map(id => ({
       [this.foreignPivotKey]: this.parent.getAttribute(this.parentKey),
       [this.relatedPivotKey]: id,
-      ...attributes
+      ...record
     }));
+  }
+
+  /**
+   * Specify extra columns to retrieve from the pivot table.
+   * These columns will be available on each related model's `pivot` (or custom accessor) property.
+   */
+  withPivot(...columns: string[]): this {
+    // Flatten in case arrays are passed
+    this.pivotColumns.push(...columns.flat());
+    return this;
+  }
+
+  /**
+   * Enable automatic timestamps (created_at, updated_at) on the pivot table.
+   */
+  withTimestamps(): this {
+    this.withTimestampsFlag = true;
+    // Also select the timestamp columns
+    this.pivotColumns.push('created_at', 'updated_at');
+    return this;
+  }
+
+  /**
+   * Set the accessor name for the pivot data on related models (default: 'pivot').
+   */
+  as(accessor: string): this {
+    this.pivotAccessor = accessor;
+    return this;
+  }
+
+  /**
+   * Add a where clause on a pivot table column.
+   */
+  wherePivot(column: string, operatorOrValue: any, value?: any): this {
+    const op = value === undefined ? '=' : operatorOrValue;
+    const val = value === undefined ? operatorOrValue : value;
+    this.pivotWheres.push({ column, operator: op, value: val });
+    // Apply immediately so calls after construction take effect
+    this.query.where(`${this.table}.${column}`, op, val);
+    return this;
+  }
+
+  /**
+   * Add a where-in clause on a pivot table column.
+   */
+  wherePivotIn(column: string, values: any[]): this {
+    this.pivotWhereIns.push({ column, values });
+    return this;
+  }
+
+  /**
+   * Sync without detaching existing relationships (only attach new).
+   */
+  async syncWithoutDetaching(ids: any[]): Promise<any> {
+    return this.sync(ids, false);
+  }
+
+  /**
+   * Update an existing pivot record.
+   */
+  async updateExistingPivot(id: any, attributes: Record<string, any>): Promise<number> {
+    if (this.withTimestampsFlag) {
+      attributes['updated_at'] = new Date();
+    }
+
+    return this.newPivotQuery()
+      .where(this.foreignPivotKey, this.parent.getAttribute(this.parentKey))
+      .where(this.relatedPivotKey, id)
+      .update(attributes);
+  }
+
+  /**
+   * Create a fresh query builder against the pivot table only (no joins).
+   */
+  protected newPivotQuery(): any {
+    return this.query.getQuery().newQuery().from(this.table);
+  }
+
+  /**
+   * Get the pivot accessor name
+   */
+  getPivotAccessor(): string {
+    return this.pivotAccessor;
+  }
+
+  /**
+   * Get the pivot columns
+   */
+  getPivotColumns(): string[] {
+    return this.pivotColumns;
+  }
+
+  /**
+   * Hydrate pivot data on a related model instance.
+   * Extracts pivot columns from the model's attributes and attaches
+   * them as a sub-object under the pivot accessor name.
+   */
+  protected hydratePivotRelation(model: any): void {
+    const pivotData: Record<string, any> = {};
+    pivotData[this.foreignPivotKey] = model.getAttribute?.(this.foreignPivotKey) ?? model[this.foreignPivotKey];
+    pivotData[this.relatedPivotKey] = model.getAttribute?.(this.relatedPivotKey) ?? model[this.relatedPivotKey];
+
+    for (const column of this.pivotColumns) {
+      pivotData[column] = model.getAttribute?.(column) ?? model[column];
+    }
+
+    model[this.pivotAccessor] = pivotData;
   }
 }

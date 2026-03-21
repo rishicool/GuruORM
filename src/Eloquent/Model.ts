@@ -1,12 +1,89 @@
 import { Builder as QueryBuilder } from '../Query/Builder';
 import { Connection } from '../Connection/Connection';
 import { Builder as EloquentBuilder } from './Builder';
-import { Events } from './Events';
+import { Events, EventHandler } from './Events';
+import { ObserverRegistry } from './Observer';
+
+/**
+ * Pre-computed Set for O(1) property lookup in Proxy traps.
+ * This replaces Array.includes() which was O(n) on every property access.
+ */
+const MODEL_PROPERTIES = new Set([
+  'table', 'primaryKey', 'keyType', 'incrementing', 'timestamps', 'dateFormat', 'connection',
+  'fillable', 'guarded', 'hidden', 'visible', 'appends', 'casts', 'dispatchesEvents',
+  'attributes', 'original', 'relations', 'exists', 'wasRecentlyCreated', 'touches', 'changes',
+  'forceDeleting'
+]);
+
+/**
+ * Shared Proxy handler factory — avoids creating new handler objects per instance.
+ * The handler closures capture actualConstructor per model via createModelProxy.
+ */
+function createModelProxy(target: any, actualConstructor: Function): any {
+  return new Proxy(target, modelProxyHandler(actualConstructor));
+}
+
+function modelProxyHandler(actualConstructor: Function): ProxyHandler<any> {
+  return {
+    get(target: any, prop: string | symbol, receiver: any) {
+      if (typeof prop === 'symbol') {
+        return target[prop];
+      }
+      if (prop === 'constructor') {
+        return actualConstructor;
+      }
+      if (MODEL_PROPERTIES.has(prop)) {
+        return Reflect.get(target, prop, receiver);
+      }
+      const getAttribute = Reflect.get(target, 'getAttribute', receiver);
+      const value = getAttribute.call(target, prop);
+      if (value !== undefined) {
+        return value;
+      }
+      return Reflect.get(target, prop, receiver);
+    },
+    set(target: any, prop: string | symbol, value: any) {
+      if (typeof prop === 'symbol') {
+        target[prop] = value;
+        return true;
+      }
+      if (MODEL_PROPERTIES.has(prop) || typeof target[prop] === 'function') {
+        target[prop] = value;
+        return true;
+      }
+      target.setAttribute(prop, value);
+      return true;
+    },
+    ownKeys(target: any) {
+      return Object.keys(target.attributes || {});
+    },
+    has(target: any, prop: string | symbol) {
+      if (typeof prop === 'string' && target.attributes && prop in target.attributes) {
+        return true;
+      }
+      return Reflect.has(target, prop);
+    },
+    getOwnPropertyDescriptor(target: any, prop: string | symbol) {
+      if (typeof prop === 'string' && target.attributes && prop in target.attributes) {
+        return {
+          enumerable: true,
+          configurable: true,
+          writable: true,
+          value: target.attributes[prop]
+        };
+      }
+      return undefined;
+    }
+  };
+}
 
 /**
  * Model base class - inspired by Laravel and Illuminate
  */
 export class Model {
+  // Cached prototype model instances for static methods (avoids re-creating per call)
+  protected static _cachedQueryModel: any = null;
+
   // Model registry for morphTo relationships
   protected static morphMap: Record<string, typeof Model> = {};
   
@@ -21,6 +98,19 @@ export class Model {
   protected timestamps = true;
   protected dateFormat?: string;
   protected connection?: string;
+
+  /**
+   * Whether this model uses timestamps.
+   * Checks the static property first (subclasses declare `static timestamps = false`),
+   * falling back to the instance property default.
+   */
+  protected usesTimestamps(): boolean {
+    const Sub = this.constructor as typeof Model;
+    if (Object.prototype.hasOwnProperty.call(Sub, 'timestamps')) {
+      return !!(Sub as any).timestamps;
+    }
+    return this.timestamps;
+  }
 
   // Mass assignment (static versions for subclasses to override)
   protected static fillable?: string[];
@@ -77,8 +167,41 @@ export class Model {
   // Event dispatcher
   protected static dispatcher: any = null;
 
-  // Global scopes
-  protected static globalScopes: Map<string, any> = new Map();
+  // Global scopes — keyed by model class name → scope name → scope (function or Scope object)
+  protected static globalScopes: Map<string, Map<string, any>> = new Map();
+
+  /**
+   * Register a new global scope on the model.
+   * Accepts either: addGlobalScope(name, scopeFn) or addGlobalScope(scopeObject)
+   */
+  static addGlobalScope(scope: any, implementation?: any): typeof Model {
+    const className = this.name;
+    if (!this.globalScopes.has(className)) {
+      this.globalScopes.set(className, new Map());
+    }
+
+    if (typeof scope === 'string' && implementation) {
+      this.globalScopes.get(className)!.set(scope, implementation);
+    } else if (typeof scope !== 'string') {
+      const scopeName = scope.constructor?.name || 'anonymous';
+      this.globalScopes.get(className)!.set(scopeName, scope);
+    }
+    return this;
+  }
+
+  /**
+   * Determine if a model has a global scope
+   */
+  static hasGlobalScope(scope: string): boolean {
+    return this.globalScopes.get(this.name)?.has(scope) ?? false;
+  }
+
+  /**
+   * Get all global scopes for this model
+   */
+  static getGlobalScopes(): Map<string, any> {
+    return this.globalScopes.get(this.name) ?? new Map();
+  }
 
   // Booted models
   protected static booted: Map<any, boolean> = new Map();
@@ -88,75 +211,8 @@ export class Model {
     this.fill(attributes);
     this.bootIfNotBooted();
     
-    // Store the actual constructor before Proxy wraps it
-    const actualConstructor = this.constructor;
-    
-    // Return a Proxy to intercept property access for attributes
-    return new Proxy(this, {
-      get(target: any, prop: string | symbol, receiver: any) {
-        // If it's a symbol, return it directly
-        if (typeof prop === 'symbol') {
-          return target[prop];
-        }
-        
-        // Return actual constructor, not Proxy's constructor
-        if (prop === 'constructor') {
-          return actualConstructor;
-        }
-        
-        // List of known Model class properties
-        const modelProperties = [
-          'table', 'primaryKey', 'keyType', 'incrementing', 'timestamps', 'dateFormat', 'connection',
-          'fillable', 'guarded', 'hidden', 'visible', 'appends', 'casts', 'dispatchesEvents',
-          'attributes', 'original', 'relations', 'exists', 'wasRecentlyCreated', 'touches', 'changes',
-          'forceDeleting' // SoftDeletes internal property
-        ];
-        
-        // If it's a model property, return it directly
-        if (modelProperties.includes(prop as string)) {
-          return Reflect.get(target, prop, receiver);
-        }
-        
-        // Try getAttribute first (it checks LOADED relations, then attributes)
-        // Use Reflect to avoid Proxy recursion
-        const getAttribute = Reflect.get(target, 'getAttribute', receiver);
-        const value = getAttribute.call(target, prop);
-        
-        // If getAttribute returned something (attribute or loaded relation), use it
-        if (value !== undefined) {
-          return value;
-        }
-        
-        // Otherwise, return the property (methods, etc.)
-        return Reflect.get(target, prop, receiver);
-      },
-      
-      set(target: any, prop: string | symbol, value: any) {
-        // If it's a symbol, set it directly
-        if (typeof prop === 'symbol') {
-          target[prop] = value;
-          return true;
-        }
-        
-        // List of known Model class properties
-        const modelProperties = [
-          'table', 'primaryKey', 'keyType', 'incrementing', 'timestamps', 'dateFormat', 'connection',
-          'fillable', 'guarded', 'hidden', 'visible', 'appends', 'casts', 'dispatchesEvents',
-          'attributes', 'original', 'relations', 'exists', 'wasRecentlyCreated', 'touches', 'changes',
-          'forceDeleting' // SoftDeletes internal property
-        ];
-        
-        // If it's a known model property or method, set it directly
-        if (modelProperties.includes(prop as string) || typeof target[prop] === 'function') {
-          target[prop] = value;
-          return true;
-        }
-        
-        // Otherwise, set it as an attribute
-        target.setAttribute(prop, value);
-        return true;
-      }
-    });
+    // Use shared Proxy handler with static Set lookup (O(1) vs O(n) per access)
+    return createModelProxy(this, this.constructor);
   }
 
   /**
@@ -183,10 +239,55 @@ export class Model {
   }
 
   /**
-   * Get a model class by its morph alias
+   * Get a model class by its morph alias.
+   * Reverse lookup: given a stored morph type string, resolve to a class.
    */
   static getMorphedModel(alias: string): typeof Model | undefined {
     return Model.morphMap[alias];
+  }
+
+  /**
+   * Register custom morph type aliases for polymorphic relationships.
+   *
+   * This decouples the stored database values from JavaScript class names,
+   * which is critical for production builds where class names may be mangled
+   * by minifiers (webpack, esbuild, rollup, etc.).
+   *
+   * Usage:
+   *   Model.setMorphMap({ 'post': Post, 'video': Video, 'comment': Comment });
+   *
+   * After registration, polymorphic relations will store 'post' instead of 'Post'
+   * (or 'e' in minified builds), making the values stable and portable.
+   */
+  static setMorphMap(map: Record<string, typeof Model>): void {
+    for (const [alias, modelClass] of Object.entries(map)) {
+      Model.morphMap[alias] = modelClass;
+    }
+  }
+
+  /**
+   * Get the morph type string for this model class.
+   *
+   * Checks the morph map for a custom alias first (e.g. 'post' for Post).
+   * Falls back to the class name only if no alias is registered.
+   *
+   * Morph relations (MorphOne, MorphMany, MorphTo) must call this method
+   * instead of using constructor.name directly.
+   */
+  static getMorphClass(): string {
+    // Search the morph map for a custom alias pointing to this class.
+    // Prefer custom aliases (not matching class name) over auto-registered ones,
+    // since boot() auto-registers under the class name but setMorphMap() provides
+    // stable, minification-safe aliases that should take precedence.
+    let autoAlias: string | null = null;
+    for (const [alias, cls] of Object.entries(Model.morphMap)) {
+      if (cls === this) {
+        if (alias !== this.name) return alias; // custom alias — prefer immediately
+        autoAlias = alias;
+      }
+    }
+    // Fall back to auto-registered class name alias, then raw class name
+    return autoAlias ?? this.name;
   }
 
   /**
@@ -244,23 +345,25 @@ export class Model {
   }
 
   /**
-   * Determine if the given attribute may be mass assigned
+   * Determine if the given attribute may be mass assigned.
+   * - If the subclass defines neither `fillable` nor `guarded`, all attributes
+   *   are allowed (permissive default — protects only when dev opts in).
+   * - If `fillable` is set, only those keys pass.
+   * - If `guarded` is set and `fillable` is not, blocked keys are denied.
    */
   isFillable(key: string): boolean {
-    // Get fillable and guarded from static properties (preferred) or instance properties (fallback)
-    const fillable = (this.constructor as typeof Model).fillable ?? this.fillable;
-    const guarded = (this.constructor as typeof Model).guarded ?? this.guarded;
-    
-    // If fillable is defined and not empty, check if key is in it
-    if (fillable.length > 0) {
-      return fillable.includes(key);
-    }
+    const SubClass = this.constructor as typeof Model;
+    const hasOwnFillable = Object.prototype.hasOwnProperty.call(SubClass, 'fillable');
+    const hasOwnGuarded  = Object.prototype.hasOwnProperty.call(SubClass, 'guarded');
 
-    // Check if not guarded
-    if (guarded.includes('*')) {
-      return false;
-    }
+    // Permissive mode: no explicit protection configured
+    if (!hasOwnFillable && !hasOwnGuarded) return true;
 
+    const fillable = SubClass.fillable ?? [];
+    const guarded  = SubClass.guarded ?? [];
+
+    if (fillable.length > 0) return fillable.includes(key);
+    if (guarded.includes('*')) return false;
     return !guarded.includes(key);
   }
 
@@ -272,10 +375,10 @@ export class Model {
       return;
     }
 
-    // Check if accessor exists
+    // Check if accessor exists (call with raw attribute value, like Laravel)
     const accessor = this.getAccessor(key);
     if (accessor) {
-      return accessor.call(this);
+      return accessor.call(this, this.attributes[key]);
     }
 
     // Check if attribute exists
@@ -351,35 +454,48 @@ export class Model {
   }
 
   /**
-   * Get an accessor for the attribute
+   * Get an accessor for the attribute.
+   * Method names are cached per class so studly() runs at most once per key per class.
    */
   protected getAccessor(key: string): Function | null {
-    const method = `get${this.studly(key)}Attribute`;
-    if (typeof (this as any)[method] === 'function') {
-      return (this as any)[method];
+    const ctor = this.constructor as any;
+    if (!Object.prototype.hasOwnProperty.call(ctor, '_accessorCache')) {
+      ctor._accessorCache = Object.create(null);
     }
-    return null;
+    const cache = ctor._accessorCache;
+    let name: string | null = cache[key];
+    if (name === undefined) {
+      const candidate = `get${this.studly(key)}Attribute`;
+      name = typeof (this as any)[candidate] === 'function' ? candidate : null;
+      cache[key] = name;
+    }
+    return name !== null ? (this as any)[name] : null;
   }
 
   /**
-   * Get a mutator for the attribute
+   * Get a mutator for the attribute.
+   * Method names are cached per class so studly() runs at most once per key per class.
    */
   protected getMutator(key: string): Function | null {
-    const method = `set${this.studly(key)}Attribute`;
-    if (typeof (this as any)[method] === 'function') {
-      return (this as any)[method];
+    const ctor = this.constructor as any;
+    if (!Object.prototype.hasOwnProperty.call(ctor, '_mutatorCache')) {
+      ctor._mutatorCache = Object.create(null);
     }
-    return null;
+    const cache = ctor._mutatorCache;
+    let name: string | null = cache[key];
+    if (name === undefined) {
+      const candidate = `set${this.studly(key)}Attribute`;
+      name = typeof (this as any)[candidate] === 'function' ? candidate : null;
+      cache[key] = name;
+    }
+    return name !== null ? (this as any)[name] : null;
   }
 
   /**
    * Convert string to studly case (PascalCase)
    */
   protected studly(value: string): string {
-    return value
-      .split('_')
-      .map(word => word.charAt(0).toUpperCase() + word.slice(1))
-      .join('');
+    return value.replace(/(^|_)([a-zA-Z])/g, (_, __, c) => c.toUpperCase());
   }
 
   /**
@@ -401,6 +517,11 @@ export class Model {
     const casts = (this.constructor as typeof Model).casts ?? this.casts;
     const castType: any = casts[key];
     if (!castType) {
+      // Auto-cast aggregate columns (withCount/withSum/etc.) to numbers
+      if (typeof value === 'string' && /_(count|sum|avg|min|max)$/.test(key)) {
+        const n = Number(value);
+        return isNaN(n) ? value : n;
+      }
       return value;
     }
 
@@ -611,10 +732,6 @@ export class Model {
     if (this.exists) {
       const saved = await this.performUpdate(query);
       
-      if (saved) {
-        this.syncOriginal();
-      }
-
       return saved;
     }
 
@@ -646,23 +763,14 @@ export class Model {
    * Save the model without firing any events
    */
   async saveQuietly(): Promise<boolean> {
-    // Temporarily disable events
-    const originalEvents = (this.constructor as any).events;
-    (this.constructor as any).events = [];
-    
-    const result = await this.save();
-    
-    // Restore events
-    (this.constructor as any).events = originalEvents;
-    
-    return result;
+    return (this.constructor as typeof Model).withoutEvents(() => this.save());
   }
 
   /**
    * Touch the model's timestamps
    */
   async touch(): Promise<boolean> {
-    if (!this.timestamps) {
+    if (!this.usesTimestamps()) {
       return false;
     }
 
@@ -736,6 +844,25 @@ export class Model {
   }
 
   /**
+   * Atomically insert or update records using database-level conflict handling.
+   * Uses ON CONFLICT (PostgreSQL/SQLite) or ON DUPLICATE KEY UPDATE (MySQL).
+   *
+   * @param values     - Record(s) to insert.
+   * @param uniqueBy   - Column(s) that form the unique/primary key constraint.
+   * @param update     - Column(s) to update on conflict. Defaults to all non-unique columns.
+   * @returns The number of affected rows.
+   */
+  static async upsert(
+    values: Record<string, any> | Record<string, any>[],
+    uniqueBy: string | string[],
+    update?: string[]
+  ): Promise<number> {
+    const vals = Array.isArray(values) ? values : [values];
+    const unique = Array.isArray(uniqueBy) ? uniqueBy : [uniqueBy];
+    return this.query().upsert(vals, unique, update);
+  }
+
+  /**
    * Execute a callback without timestamps being updated
    */
   static async withoutTimestamps<T>(callback: () => T | Promise<T>): Promise<T> {
@@ -765,7 +892,7 @@ export class Model {
     // Check if the static method exists (for ES5 compatibility)
     if (typeof constructor.isIgnoringTimestamps !== 'function') {
       // Fall back to checking if timestamps are disabled on this instance
-      if (!this.timestamps) {
+      if (!this.usesTimestamps()) {
         return;
       }
     } else if (constructor.isIgnoringTimestamps()) {
@@ -774,12 +901,12 @@ export class Model {
 
     const time = new Date();
 
-    const updatedAtColumn = (this.constructor as typeof Model).UPDATED_AT || 'updated_at';
+    const updatedAtColumn = (this.constructor as typeof Model).UPDATED_AT;
     if (updatedAtColumn) {
       this.setAttribute(updatedAtColumn, time);
     }
 
-    const createdAtColumn = (this.constructor as typeof Model).CREATED_AT || 'created_at';
+    const createdAtColumn = (this.constructor as typeof Model).CREATED_AT;
     if (!this.exists && createdAtColumn) {
       this.setAttribute(createdAtColumn, time);
     }
@@ -794,15 +921,11 @@ export class Model {
       return false;
     }
 
-    if (this.timestamps) {
+    if (this.usesTimestamps()) {
       this.updateTimestamps();
     }
 
     const attributes = this.attributes;
-    
-    // DEBUG: Log attributes being inserted
-    console.log('[GuruORM DEBUG] performInsert attributes:', JSON.stringify(attributes, null, 2));
-    console.log('[GuruORM DEBUG] attributes keys:', Object.keys(attributes));
 
     if (this.incrementing) {
       const id = await query.insertGetId(attributes);
@@ -844,7 +967,7 @@ export class Model {
       return false;
     }
 
-    if (this.timestamps) {
+    if (this.usesTimestamps()) {
       this.updateTimestamps();
     }
 
@@ -964,6 +1087,10 @@ export class Model {
     const builder = new EloquentBuilder(this.newBaseQueryBuilder());
     builder.setModel(this);
 
+    // Cache for scope method lookups (avoids string concat + prototype check per call)
+    const scopeCache = new Map<string, Function | null>();
+    const modelConstructor = this.constructor;
+
     // Wrap builder in Proxy to support dynamic scope methods
     const proxy: any = new Proxy(builder, {
       get(target: any, prop: string | symbol) {
@@ -981,13 +1108,26 @@ export class Model {
           return value;
         }
 
-        // Check if it's a scope method (e.g., active() -> scopeActive())
-        const scopeMethod = `scope${String(prop).charAt(0).toUpperCase() + String(prop).slice(1)}`;
-        const modelConstructor = target.getModel().constructor;
-        
-        if (typeof modelConstructor[scopeMethod] === 'function') {
+        // Check scope cache first
+        const propStr = prop as string;
+        let scopeFn = scopeCache.get(propStr);
+        if (scopeFn === undefined) {
+          // Cache miss — look up once on prototype first (instance methods),
+          // then own static of the subclass (never walk the chain to avoid proxy recursion).
+          const scopeMethod = `scope${propStr.charAt(0).toUpperCase() + propStr.slice(1)}`;
+          const protoFn = (modelConstructor as any).prototype?.[scopeMethod];
+          const ownStaticFn = Object.prototype.hasOwnProperty.call(modelConstructor, scopeMethod)
+            ? (modelConstructor as any)[scopeMethod]
+            : undefined;
+          scopeFn = (typeof protoFn === 'function' ? protoFn : null)
+                 ?? (typeof ownStaticFn === 'function' ? ownStaticFn : null)
+                 ?? null;
+          scopeCache.set(propStr, scopeFn ?? null);
+        }
+
+        if (scopeFn) {
           return function(...args: any[]) {
-            modelConstructor[scopeMethod](target, ...args);
+            (scopeFn as Function)(target, ...args);
             return proxy;
           };
         }
@@ -1086,9 +1226,15 @@ export class Model {
    * Filter visible attributes
    */
   protected filterVisible(array: Record<string, any>): Record<string, any> {
-    if (this.visible.length > 0) {
+    // Merge static class visible list with instance overrides (makeVisible/makeHidden)
+    const staticVisible = (this.constructor as typeof Model).visible ?? [];
+    const effectiveVisible = this.visible.length > 0
+      ? this.visible
+      : staticVisible;
+
+    if (effectiveVisible.length > 0) {
       const visible: Record<string, any> = {};
-      for (const key of this.visible) {
+      for (const key of effectiveVisible) {
         if (array[key] !== undefined) {
           visible[key] = array[key];
         }
@@ -1115,10 +1261,18 @@ export class Model {
    */
   makeVisible(attributes: string | string[]): this {
     const attrs = Array.isArray(attributes) ? attributes : [attributes];
+    // Remove from hidden list
     this.hidden = this.hidden.filter(attr => !attrs.includes(attr));
-    
+    // Also remove from static hidden if needed
+    const staticHidden = (this.constructor as typeof Model).hidden;
+    if (staticHidden) {
+      (this.constructor as typeof Model).hidden = staticHidden.filter(a => !attrs.includes(a));
+    }
+
+    // Start visible list from static visible (if any), then merge in the new attrs
     if (this.visible.length === 0) {
-      this.visible = attrs;
+      const staticVisible = (this.constructor as typeof Model).visible ?? [];
+      this.visible = [...new Set([...staticVisible, ...attrs])];
     } else {
       this.visible = [...new Set([...this.visible, ...attrs])];
     }
@@ -1183,12 +1337,26 @@ export class Model {
   }
 
   /**
+   * Get or create a cached model prototype for read-only static query methods.
+   * Avoids creating a new Model+Proxy on every User.where(), User.find(), etc.
+   * Safe because these methods only use the model for table name / connection config.
+   */
+  protected static _getQueryModel<T extends Model>(this: new (attributes?: Record<string, any>) => T): T {
+    const ctor = this as any;
+    if (!ctor._cachedQueryModel || ctor._cachedQueryModel.constructor !== this) {
+      ctor._cachedQueryModel = new this();
+    }
+    return ctor._cachedQueryModel;
+  }
+
+  /**
    * Create a new instance of the model
    */
-  static async create<T extends Model>(this: new (attributes?: Record<string, any>) => T, attributes: Record<string, any> = {}): Promise<T> {
+  static async create<T extends Model>(this: new (attributes?: Record<string, any>) => T, attributes: Record<string, any> = {}): Promise<T | false> {
     const model = new this();
     model.fill(attributes);
-    await model.save();
+    const saved = await model.save();
+    if (saved === false) return false;
     return model;
   }
 
@@ -1196,24 +1364,21 @@ export class Model {
    * Find a model by its primary key
    */
   static async find<T extends Model>(this: new (attributes?: Record<string, any>) => T, id: any, columns: string[] = ['*']): Promise<T | null> {
-    const model = new this();
-    return await model.newQuery().find(id, columns);
+    return await (this as any)._getQueryModel().newQuery().find(id, columns);
   }
 
   /**
    * Find a model by its primary key or throw an exception
    */
   static async findOrFail<T extends Model>(this: new (attributes?: Record<string, any>) => T, id: any, columns: string[] = ['*']): Promise<T> {
-    const model = new this();
-    return await model.newQuery().findOrFail(id, columns);
+    return await (this as any)._getQueryModel().newQuery().findOrFail(id, columns);
   }
 
   /**
    * Get all of the models from the database
    */
   static all<T extends Model>(this: new (attributes?: Record<string, any>) => T, columns: string[] = ['*']): Promise<T[]> {
-    const model = new this();
-    return model.newQuery().get(columns);
+    return (this as any)._getQueryModel().newQuery().get(columns);
   }
 
   /**
@@ -1224,24 +1389,21 @@ export class Model {
     count: number,
     callback: any
   ): Promise<boolean> {
-    const model = new this();
-    return await model.newQuery().chunk(count, callback);
+    return await (this as any)._getQueryModel().newQuery().chunk(count, callback);
   }
 
   /**
    * Begin querying the model
    */
   static query<T extends Model>(this: new (attributes?: Record<string, any>) => T): EloquentBuilder {
-    const model = new this();
-    return model.newQuery();
+    return (this as any)._getQueryModel().newQuery();
   }
 
   /**
    * Begin querying the model with an eager load
    */
   static with<T extends Model>(this: new (attributes?: Record<string, any>) => T, relations: string | string[] | Record<string, Function>): EloquentBuilder {
-    const model = new this();
-    return model.newQuery().with(relations);
+    return (this as any)._getQueryModel().newQuery().with(relations);
   }
 
   /**
@@ -1254,8 +1416,7 @@ export class Model {
     value?: any,
     boolean: 'and' | 'or' = 'and'
   ): EloquentBuilder {
-    const model = new this();
-    return model.newQuery().where(column, operator, value, boolean);
+    return (this as any)._getQueryModel().newQuery().where(column, operator, value, boolean);
   }
 
   /**
@@ -1267,8 +1428,7 @@ export class Model {
     operator?: any,
     value?: any
   ): EloquentBuilder {
-    const model = new this();
-    return model.newQuery().orWhere(column, operator, value);
+    return (this as any)._getQueryModel().newQuery().orWhere(column, operator, value);
   }
 
   /**
@@ -1279,8 +1439,7 @@ export class Model {
     column: string,
     values: any[]
   ): EloquentBuilder {
-    const model = new this();
-    return model.newQuery().whereIn(column, values);
+    return (this as any)._getQueryModel().newQuery().whereIn(column, values);
   }
 
   /**
@@ -1291,8 +1450,7 @@ export class Model {
     column: string,
     values: any[]
   ): EloquentBuilder {
-    const model = new this();
-    return model.newQuery().whereNotIn(column, values);
+    return (this as any)._getQueryModel().newQuery().whereNotIn(column, values);
   }
 
   /**
@@ -1302,8 +1460,7 @@ export class Model {
     this: new (attributes?: Record<string, any>) => T,
     column: string
   ): EloquentBuilder {
-    const model = new this();
-    return model.newQuery().whereNull(column);
+    return (this as any)._getQueryModel().newQuery().whereNull(column);
   }
 
   /**
@@ -1313,8 +1470,7 @@ export class Model {
     this: new (attributes?: Record<string, any>) => T,
     column: string
   ): EloquentBuilder {
-    const model = new this();
-    return model.newQuery().whereNotNull(column);
+    return (this as any)._getQueryModel().newQuery().whereNotNull(column);
   }
 
   /**
@@ -1325,8 +1481,7 @@ export class Model {
     column: string,
     values: [any, any]
   ): EloquentBuilder {
-    const model = new this();
-    return model.newQuery().whereBetween(column, values);
+    return (this as any)._getQueryModel().newQuery().whereBetween(column, values);
   }
 
   /**
@@ -1337,8 +1492,7 @@ export class Model {
     column: string,
     direction: 'asc' | 'desc' = 'asc'
   ): EloquentBuilder {
-    const model = new this();
-    return model.newQuery().orderBy(column, direction);
+    return (this as any)._getQueryModel().newQuery().orderBy(column, direction);
   }
 
   /**
@@ -1348,8 +1502,7 @@ export class Model {
     this: new (attributes?: Record<string, any>) => T,
     value: number
   ): EloquentBuilder {
-    const model = new this();
-    return model.newQuery().limit(value);
+    return (this as any)._getQueryModel().newQuery().limit(value);
   }
 
   /**
@@ -1359,8 +1512,7 @@ export class Model {
     this: new (attributes?: Record<string, any>) => T,
     value: number
   ): EloquentBuilder {
-    const model = new this();
-    return model.newQuery().offset(value);
+    return (this as any)._getQueryModel().newQuery().offset(value);
   }
 
   /**
@@ -1370,8 +1522,7 @@ export class Model {
     this: new (attributes?: Record<string, any>) => T,
     ...columns: string[]
   ): EloquentBuilder {
-    const model = new this();
-    return model.newQuery().select(...columns);
+    return (this as any)._getQueryModel().newQuery().select(...columns);
   }
 
   /**
@@ -1386,8 +1537,7 @@ export class Model {
     type: string = 'inner',
     where: boolean = false
   ): EloquentBuilder {
-    const model = new this();
-    return model.newQuery().join(table, first, operator, second, type, where);
+    return (this as any)._getQueryModel().newQuery().join(table, first, operator, second, type, where);
   }
 
   /**
@@ -1400,8 +1550,7 @@ export class Model {
     operator?: string,
     second?: string
   ): EloquentBuilder {
-    const model = new this();
-    return model.newQuery().leftJoin(table, first, operator, second);
+    return (this as any)._getQueryModel().newQuery().leftJoin(table, first, operator, second);
   }
 
   /**
@@ -1414,8 +1563,7 @@ export class Model {
     operator?: string,
     second?: string
   ): EloquentBuilder {
-    const model = new this();
-    return model.newQuery().rightJoin(table, first, operator, second);
+    return (this as any)._getQueryModel().newQuery().rightJoin(table, first, operator, second);
   }
 
   /**
@@ -1424,8 +1572,7 @@ export class Model {
   static distinct<T extends Model>(
     this: new (attributes?: Record<string, any>) => T
   ): EloquentBuilder {
-    const model = new this();
-    return model.newQuery().distinct();
+    return (this as any)._getQueryModel().newQuery().distinct();
   }
 
   /**
@@ -1435,8 +1582,7 @@ export class Model {
     this: new (attributes?: Record<string, any>) => T,
     ...groups: string[]
   ): EloquentBuilder {
-    const model = new this();
-    return model.newQuery().groupBy(...groups);
+    return (this as any)._getQueryModel().newQuery().groupBy(...groups);
   }
 
   /**
@@ -1446,8 +1592,7 @@ export class Model {
     this: new (attributes?: Record<string, any>) => T,
     relations: string | string[] | Record<string, Function>
   ): EloquentBuilder {
-    const model = new this();
-    return model.newQuery().withCount(relations);
+    return (this as any)._getQueryModel().newQuery().withCount(relations);
   }
 
   /**
@@ -1459,8 +1604,7 @@ export class Model {
     operator: string = '>=',
     count: number = 1
   ): EloquentBuilder {
-    const model = new this();
-    return model.newQuery().has(relation, operator, count);
+    return (this as any)._getQueryModel().newQuery().has(relation, operator, count);
   }
 
   /**
@@ -1470,8 +1614,7 @@ export class Model {
     this: new (attributes?: Record<string, any>) => T,
     relation: string
   ): EloquentBuilder {
-    const model = new this();
-    return model.newQuery().doesntHave(relation);
+    return (this as any)._getQueryModel().newQuery().doesntHave(relation);
   }
 
   /**
@@ -1484,8 +1627,7 @@ export class Model {
     operator: string = '>=',
     count: number = 1
   ): EloquentBuilder {
-    const model = new this();
-    return model.newQuery().whereHas(relation, callback, operator, count);
+    return (this as any)._getQueryModel().newQuery().whereHas(relation, callback, operator, count);
   }
 
   static whereDoesntHave<T extends Model>(
@@ -1493,23 +1635,41 @@ export class Model {
     relation: string,
     callback?: Function
   ): EloquentBuilder {
-    const model = new this();
-    return model.newQuery().whereDoesntHave(relation, callback);
+    return (this as any)._getQueryModel().newQuery().whereDoesntHave(relation, callback);
+  }
+
+  /**
+   * Remove a named global scope from the query
+   */
+  static withoutGlobalScope<T extends Model>(
+    this: new (attributes?: Record<string, any>) => T,
+    scope: string
+  ): EloquentBuilder {
+    return (this as any)._getQueryModel().newQuery().withoutGlobalScope(scope);
+  }
+
+  /**
+   * Remove all (or specific) global scopes from the query
+   */
+  static withoutGlobalScopes<T extends Model>(
+    this: new (attributes?: Record<string, any>) => T,
+    scopes?: string[]
+  ): EloquentBuilder {
+    return (this as any)._getQueryModel().newQuery().withoutGlobalScopes(scopes);
   }
 
   /**
    * Get the first record matching the attributes
    */
   static first<T extends Model>(this: new (attributes?: Record<string, any>) => T, columns: string[] = ['*']): Promise<T | null> {
-    const model = new this();
-    return model.newQuery().first(columns);
+    return (this as any)._getQueryModel().newQuery().first(columns);
   }
 
   /**
    * Execute a query for a single record by ID and delete it
    */
   static async destroy<T extends Model>(this: new (attributes?: Record<string, any>) => T, ids: any | any[]): Promise<number> {
-    const model = new this();
+    const model = (this as any)._getQueryModel();
     const idsArray = Array.isArray(ids) ? ids : [ids];
     return await model.newQuery().whereIn(model.getKeyName(), idsArray).delete();
   }
@@ -1518,40 +1678,43 @@ export class Model {
    * Retrieve the "count" result of the query
    */
   static count<T extends Model>(this: new (attributes?: Record<string, any>) => T, columns: string = '*'): Promise<number> {
-    const model = new this();
-    return model.newQuery().count(columns);
+    return (this as any)._getQueryModel().newQuery().count(columns);
+  }
+
+  static exists(): Promise<boolean> {
+    return (this as any)._getQueryModel().newQuery().exists();
+  }
+
+  static doesntExist(): Promise<boolean> {
+    return (this as any)._getQueryModel().newQuery().doesntExist();
   }
 
   /**
    * Retrieve the minimum value of a given column
    */
   static min<T extends Model>(this: new (attributes?: Record<string, any>) => T, column: string): Promise<number> {
-    const model = new this();
-    return model.newQuery().min(column);
+    return (this as any)._getQueryModel().newQuery().min(column);
   }
 
   /**
    * Retrieve the maximum value of a given column
    */
   static max<T extends Model>(this: new (attributes?: Record<string, any>) => T, column: string): Promise<number> {
-    const model = new this();
-    return model.newQuery().max(column);
+    return (this as any)._getQueryModel().newQuery().max(column);
   }
 
   /**
    * Retrieve the sum of the values of a given column
    */
   static sum<T extends Model>(this: new (attributes?: Record<string, any>) => T, column: string): Promise<number> {
-    const model = new this();
-    return model.newQuery().sum(column);
+    return (this as any)._getQueryModel().newQuery().sum(column);
   }
 
   /**
    * Retrieve the average of the values of a given column
    */
   static avg<T extends Model>(this: new (attributes?: Record<string, any>) => T, column: string): Promise<number> {
-    const model = new this();
-    return model.newQuery().avg(column);
+    return (this as any)._getQueryModel().newQuery().avg(column);
   }
 
   /**
@@ -1570,7 +1733,7 @@ export class Model {
     
     // Properties that can be copied by reference (primitives or class-level data)
     const simplePropertiesToCopy = [
-      'table', 'primaryKey', 'keyType', 'incrementing', 'timestamps', 'dateFormat', 'connection',
+      'table', 'primaryKey', 'keyType', 'incrementing', 'dateFormat', 'connection',
       'fillable', 'guarded', 'hidden', 'visible', 'appends', 'casts', 'dispatchesEvents',
       'wasRecentlyCreated'
     ];
@@ -1624,87 +1787,8 @@ export class Model {
     
     model.syncOriginal();
     
-    // Manually wrap in Proxy (same logic as constructor)
-    return new Proxy(model, {
-      get(target: any, prop: string | symbol, receiver: any) {
-        if (typeof prop === 'symbol') {
-          return Reflect.get(target, prop, receiver);
-        }
-        
-        // Return actual constructor, not Proxy's constructor
-        if (prop === 'constructor') {
-          return actualConstructor;
-        }
-        
-        const modelProperties = [
-          'table', 'primaryKey', 'keyType', 'incrementing', 'timestamps', 'dateFormat', 'connection',
-          'fillable', 'guarded', 'hidden', 'visible', 'appends', 'casts', 'dispatchesEvents',
-          'attributes', 'original', 'relations', 'changes', 'exists', 'wasRecentlyCreated'
-        ];
-        
-        if (modelProperties.includes(prop as string)) {
-          return Reflect.get(target, prop, receiver);
-        }
-        
-        // Try getAttribute (checks LOADED relations, then attributes)
-        const getAttribute = Reflect.get(target, 'getAttribute', receiver);
-        const value = getAttribute.call(target, prop);
-        
-        if (value !== undefined) {
-          return value;
-        }
-        
-        return Reflect.get(target, prop, receiver);
-      },
-      
-      set(target: any, prop: string | symbol, value: any) {
-        if (typeof prop === 'symbol') {
-          target[prop] = value;
-          return true;
-        }
-        
-        const modelProperties = [
-          'table', 'primaryKey', 'keyType', 'incrementing', 'timestamps', 'dateFormat', 'connection',
-          'fillable', 'guarded', 'hidden', 'visible', 'appends', 'casts', 'dispatchesEvents',
-          'attributes', 'original', 'relations', 'exists', 'wasRecentlyCreated'
-        ];
-        
-        if (modelProperties.includes(prop as string) || typeof target[prop] === 'function') {
-          target[prop] = value;
-          return true;
-        }
-        
-        target.setAttribute(prop, value);
-        return true;
-      },
-      
-      ownKeys(target: any) {
-        // Return only attribute keys for Object.keys() to work correctly
-        return Object.keys(target.attributes || {});
-      },
-      
-      has(target: any, prop: string | symbol) {
-        // Check if property exists in attributes
-        if (typeof prop === 'string' && target.attributes && prop in target.attributes) {
-          return true;
-        }
-        return Reflect.has(target, prop);
-      },
-      
-      getOwnPropertyDescriptor(target: any, prop: string | symbol) {
-        // For attributes, return a descriptor that makes them enumerable
-        if (typeof prop === 'string' && target.attributes && prop in target.attributes) {
-          return {
-            enumerable: true,
-            configurable: true,
-            writable: true,
-            value: target.attributes[prop]
-          };
-        }
-        // For other properties, return undefined so they're not enumerable
-        return undefined;
-      }
-    }) as this;
+    // Use shared Proxy handler (O(1) Set lookup, no per-instance handler allocation)
+    return createModelProxy(model, actualConstructor) as this;
   }
 
   /**
@@ -2039,7 +2123,6 @@ export class Model {
     const modelClass = this.constructor.name;
     
     // Call observers first
-    const { ObserverRegistry } = require('./Observer');
     const observerResult = await ObserverRegistry.callObservers(modelClass, event, this);
     
     if (observerResult === false && halt) {
@@ -2267,18 +2350,72 @@ export class Model {
   }
 
   /**
+   * Register a restoring model event listener
+   */
+  static restoring(handler: (model: any) => void | Promise<void> | boolean | Promise<boolean>): void {
+    Events.listen(this.name, 'restoring', handler);
+  }
+
+  /**
+   * Register a restored model event listener
+   */
+  static restored(handler: (model: any) => void | Promise<void> | boolean | Promise<boolean>): void {
+    Events.listen(this.name, 'restored', handler);
+  }
+
+  /**
    * Register an observer with the model
    */
   static observe(observer: any): void {
-    const { ObserverRegistry } = require('./Observer');
-    ObserverRegistry.observe(this.name, observer);
+    // Support both observer instances, observer classes (constructors), and plain objects
+    let observerInstance = observer;
+    if (typeof observer === 'function' && observer.prototype) {
+      observerInstance = new observer();
+    }
+    ObserverRegistry.observe(this.name, observerInstance);
   }
 
   /**
    * Clear all observers for the model
    */
   static clearObservers(): void {
-    const { ObserverRegistry } = require('./Observer');
     ObserverRegistry.clearObservers(this.name);
+    Events.flush(this.name);
   }
 }
+
+// ─── Static scope proxy ───────────────────────────────────────────────────
+// Override Model's static prototype chain so unknown static property accesses
+// (e.g. `ScopeUser.active()`) are dispatched to `this.query().<method>()`
+// without any overhead for known static methods.
+//
+// Lookup order for `ScopeUser.active()`:
+//   own ScopeUser  →  inherited Model  →  Model.__proto__ (proxy below)
+// Known methods (where/find/orderBy/etc) live on Model, so the proxy is NEVER
+// reached for them — zero overhead on the hot path.
+//
+Object.setPrototypeOf(Model, new Proxy(
+  Object.getPrototypeOf(Model) as object,
+  {
+    get(target: any, prop: string | symbol, receiver: any): any {
+      const existing = Reflect.get(target, prop, receiver);
+      if (existing !== undefined || typeof prop === 'symbol') return existing;
+      // Only reached for unknown static names — check for scope method on subclass.
+      // IMPORTANT: use Object.hasOwn / prototype check only — never walk
+      // receiver's static prototype chain or we'll recurse back into this handler.
+      const propStr = prop as string;
+      const scopeKey = `scope${propStr.charAt(0).toUpperCase()}${propStr.slice(1)}`;
+      const hasScopeFn =
+        // Instance scope methods (most common): defined on Model.prototype
+        typeof (receiver as any).prototype?.[scopeKey] === 'function' ||
+        // Static scope methods defined as own prop of the subclass
+        Object.prototype.hasOwnProperty.call(receiver, scopeKey);
+      if (hasScopeFn) {
+        return function(this: typeof Model, ...args: any[]) {
+          return (this as any)._getQueryModel().newQuery()[propStr](...args);
+        };
+      }
+      return undefined;
+    },
+  },
+));

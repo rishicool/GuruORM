@@ -1,5 +1,6 @@
 import * as fs from 'fs';
 import * as path from 'path';
+import { getDirname } from '../Support/compat.js';
 
 /**
  * Seeder file generator
@@ -8,7 +9,7 @@ export class SeederMaker {
   protected stubPath: string;
 
   constructor(stubPath?: string) {
-    this.stubPath = stubPath || path.join(__dirname, '../../stubs/seeder.stub');
+    this.stubPath = stubPath || path.join(getDirname(), '../../stubs/seeder.stub');
   }
 
   /**
@@ -33,13 +34,11 @@ export class SeederMaker {
     
     // Convert to PascalCase
     let className = baseName
-      .split(/[_-]/)
-      .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+      .split(/[_\-\s]+/)
+      .map(word => word.charAt(0).toUpperCase() + word.slice(1))
       .join('');
     
-    if (!className.endsWith('Seeder')) {
-      className += 'Seeder';
-    }
+    className += 'Seeder';
     
     return className;
   }

@@ -89,7 +89,7 @@ describe('Constrained Lazy Eager Loading', () => {
     };
 
     // Set up Model static connection
-    (Model as any).connectionResolver = {
+    (Model as any).resolver = {
       connection: jest.fn().mockReturnValue(mockConnection),
     };
   });

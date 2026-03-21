@@ -47,24 +47,12 @@ export class MorphOne extends Relation {
   addConstraints(): void {
     if (this.parent.modelExists()) {
       const foreignKeyValue = this.parent.getAttribute(this.localKey);
-      const morphTypeValue = this.parent.constructor.name;
+      const morphTypeValue = (this.parent.constructor as typeof Model).getMorphClass();
       
       this.query
         .where(this.foreignKey, '=', foreignKeyValue)
         .where(this.morphType, '=', morphTypeValue);
-      
-      // Automatically apply soft delete constraint if related model uses soft deletes
-      const relatedModel = this.related;
-      const relatedConstructor = relatedModel.constructor as any;
-      const usesSoftDeletes = relatedConstructor.softDeletes === true || 
-                              relatedConstructor.prototype?.softDeletes === true;
-      
-      if (usesSoftDeletes) {
-        const deletedAtColumn = relatedConstructor.deletedAt || 
-                                relatedConstructor.DELETED_AT || 
-                                'deleted_at';
-        this.query.whereNull(deletedAtColumn);
-      }
+      this.applySoftDeleteConstraint();
     }
   }
 
@@ -79,20 +67,10 @@ export class MorphOne extends Relation {
     if (keys.length > 0) {
       this.query
         .whereIn(this.foreignKey, keys)
-        .where(this.morphType, '=', this.parent.constructor.name);
+        .where(this.morphType, '=', (this.parent.constructor as typeof Model).getMorphClass());
     }
     
-    // Apply soft delete constraint for eager loading too
-    const relatedConstructor = this.related.constructor as any;
-    const usesSoftDeletes = relatedConstructor.softDeletes === true || 
-                            relatedConstructor.prototype?.softDeletes === true;
-    
-    if (usesSoftDeletes) {
-      const deletedAtColumn = relatedConstructor.deletedAt || 
-                              relatedConstructor.DELETED_AT || 
-                              'deleted_at';
-      this.query.whereNull(deletedAtColumn);
-    }
+    this.applySoftDeleteConstraint();
   }
 
   /**
@@ -121,7 +99,7 @@ export class MorphOne extends Relation {
 
     for (const model of models) {
       const foreignKeyValue = model.getAttribute(this.localKey);
-      const morphTypeValue = model.constructor.name;
+      const morphTypeValue = (model.constructor as typeof Model).getMorphClass();
       const compositeKey = `${foreignKeyValue}::${morphTypeValue}`;
       if (dictionary[compositeKey]) {
         model['relations'][relation] = dictionary[compositeKey];

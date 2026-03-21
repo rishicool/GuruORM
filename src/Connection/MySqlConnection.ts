@@ -55,7 +55,7 @@ export class MySqlConnection extends Connection {
       const time = Date.now() - startTime;
       this.logQuery(query, bindings, time);
       
-      return rows as any[];
+      return this.postProcessResponse(rows as any[]);
     } catch (error) {
       throw this.handleQueryException(error as Error, query, bindings);
     }
@@ -182,18 +182,10 @@ export class MySqlConnection extends Connection {
   }
 
   /**
-   * Handle a query exception
-   */
-  protected handleQueryException(error: Error, query: string, bindings: any[]): Error {
-    // Enhanced error handling can be added here
-    return error;
-  }
-
-  /**
    * Set the query grammar to the default implementation
    */
   protected useDefaultQueryGrammar(): void {
-    this.queryGrammar = new QueryGrammar();
+    this.setQueryGrammar(new QueryGrammar());
   }
 
   /**

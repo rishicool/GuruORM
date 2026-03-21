@@ -1,4 +1,4 @@
-// @ts-nocheck - Collection extends Array with intentional signature overrides
+// Collection extends Array with intentional signature overrides
 /**
  * Collection class - inspired by Laravel and Illuminate
  * Provides a fluent, convenient wrapper for working with arrays
@@ -51,7 +51,7 @@ export class Collection<T = any> extends Array<T> {
     const chunks: Collection<T>[] = [];
 
     for (let i = 0; i < this.length; i += size) {
-      chunks.push(new Collection<T>(...this.slice(i, i + size)));
+      chunks.push(Collection.from(Array.prototype.slice.call(this, i, i + size)) as unknown as Collection<T>);
     }
 
     return new Collection<Collection<T>>(...chunks);
@@ -216,7 +216,7 @@ export class Collection<T = any> extends Array<T> {
   /**
    * Run a map over each of the items
    */
-  // @ts-ignore - Intentional override of Array.map signature
+  // @ts-expect-error - Intentional override: narrowing Array.map return type from T[] to Collection<U>
   map<U>(callback: (item: T, index: number) => U): Collection<U> {
     return new Collection<U>(...super.map(callback));
   }
@@ -270,8 +270,16 @@ export class Collection<T = any> extends Array<T> {
   /**
    * Pluck an array of values from an array
    */
-  pluck(key: string): Collection<any> {
-    return this.map((item: any) => item[key]);
+  pluck(valueKey: string, keyColumn?: string): Collection<any> | Record<string, any> {
+    if (keyColumn !== undefined) {
+      // Return a plain object keyed by keyColumn, with values from valueKey
+      const result: Record<string, any> = {};
+      for (const item of (this as unknown as any[])) {
+        result[item[keyColumn]] = item[valueKey];
+      }
+      return result as any;
+    }
+    return this.map((item: any) => item[valueKey]) as unknown as Collection<any>;
   }
 
   /**
@@ -300,7 +308,7 @@ export class Collection<T = any> extends Array<T> {
   /**
    * Reduce the collection to a single value
    */
-  // @ts-ignore - Intentional override of Array.reduce signature
+  // @ts-expect-error - Intentional override: narrowing Array.reduce signature for Collection use
   reduce<U>(callback: (carry: U, item: T) => U, initial: U): U {
     return super.reduce(callback, initial);
   }
@@ -315,6 +323,7 @@ export class Collection<T = any> extends Array<T> {
   /**
    * Reverse the order of the items
    */
+  // @ts-expect-error - Intentional override: narrowing Array.reverse return type
   reverse(): Collection<T> {
     return new Collection<T>(...super.reverse());
   }
@@ -340,15 +349,20 @@ export class Collection<T = any> extends Array<T> {
   }
 
   /**
-   * Slice the collection
+   * Slice the collection - Laravel-style: slice(offset, length?)
+   * offset: start index; length: number of items (not end index)
    */
-  slice(start: number, end?: number): Collection<T> {
-    return new Collection<T>(...super.slice(start, end));
+  // @ts-expect-error - Intentional override: narrowing Array.slice return type
+  slice(offset: number, length?: number): Collection<T> {
+    const start = offset < 0 ? Math.max(this.length + offset, 0) : offset;
+    const end = length !== undefined ? start + length : undefined;
+    return Collection.from(Array.prototype.slice.call(this, start, end)) as unknown as Collection<T>;
   }
 
   /**
    * Sort the collection
    */
+  // @ts-expect-error - Intentional override: narrowing Array.sort return type
   sort(callback?: (a: T, b: T) => number): Collection<T> {
     return new Collection<T>(...super.sort(callback));
   }
@@ -365,6 +379,78 @@ export class Collection<T = any> extends Array<T> {
       if (aVal > bVal) return 1;
       return 0;
     });
+  }
+
+  /**
+   * Sort the collection by a key in descending order
+   */
+  sortByDesc(key: string | ((item: T) => any)): Collection<T> {
+    return this.sort((a, b) => {
+      const aVal = typeof key === 'function' ? key(a) : (a as any)[key];
+      const bVal = typeof key === 'function' ? key(b) : (b as any)[key];
+      if (aVal > bVal) return -1;
+      if (aVal < bVal) return 1;
+      return 0;
+    });
+  }
+
+  /**
+   * Key the collection by the given key, returning a plain object
+   */
+  keyBy(key: string | ((item: T) => string)): Record<string, T> {
+    const result: Record<string, T> = {};
+    for (const item of this) {
+      const k = typeof key === 'function' ? key(item) : String((item as any)[key]);
+      result[k] = item;
+    }
+    return result;
+  }
+
+  /**
+   * Return items that also exist in the given array/collection
+   */
+  intersect(items: T[] | Collection<T>): Collection<T> {
+    const other = Array.isArray(items) ? items : Array.from(items);
+    return new Collection<T>(...this.filter(item => other.includes(item)));
+  }
+
+  /**
+   * Merge the collection with the given items
+   */
+  merge(items: T[] | Collection<T>): Collection<T> {
+    const other = Array.isArray(items) ? items : Array.from(items);
+    return new Collection<T>(...this, ...other);
+  }
+
+  /**
+   * Concatenate items and return a new Collection (overrides Array.concat)
+   */
+  // @ts-expect-error - Intentional override: Collection.concat returns Collection<T> instead of T[]
+  concat(...args: (T | T[] | Collection<T>)[]): Collection<T> {
+    const flat: T[] = [];
+    for (const arg of args) {
+      if (Array.isArray(arg)) {
+        flat.push(...arg);
+      } else {
+        flat.push(arg as T);
+      }
+    }
+    return new Collection<T>(...Array.from(this), ...flat);
+  }
+
+  /**
+   * Re-index the collection (returns a fresh Collection with same items)
+   */
+  // @ts-expect-error - Intentional override: Collection.values() returns Collection<T> for chaining instead of ArrayIterator
+  values(): Collection<T> {
+    return new Collection<T>(...Array.from(this));
+  }
+
+  /**
+   * Serialize the collection to a JSON string
+   */
+  toJson(): string {
+    return JSON.stringify(this.toArray());
   }
 
   /**
@@ -419,7 +505,7 @@ export class Collection<T = any> extends Array<T> {
     }
 
     const seen = new Set();
-    return this.filter((item) => {
+    const filtered = Array.prototype.filter.call(this, (item: T) => {
       const value = typeof key === 'function' ? key(item) : (item as any)[key];
       if (seen.has(value)) {
         return false;
@@ -428,6 +514,7 @@ export class Collection<T = any> extends Array<T> {
       seen.add(value);
       return true;
     });
+    return new Collection<T>(...filtered);
   }
 
   /**
@@ -444,7 +531,7 @@ export class Collection<T = any> extends Array<T> {
       compareValue = value;
     }
 
-    return this.filter((item: any) => {
+    const filtered = Array.prototype.filter.call(this, (item: any) => {
       const itemValue = item[key];
 
       switch (operator) {
@@ -467,6 +554,7 @@ export class Collection<T = any> extends Array<T> {
           return itemValue === compareValue;
       }
     });
+    return new Collection<T>(...filtered);
   }
 
   /**

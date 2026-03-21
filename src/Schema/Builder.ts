@@ -113,6 +113,23 @@ export class Builder {
         const spatialName = command.index || `${table}_${command.columns.join('_')}_spatial`;
         await this.connection.statement(`CREATE INDEX ${this.grammar.wrap(spatialName)} ON ${tableName} USING GIST (${spatialCols})`);
         break;
+
+      case 'dropColumn':
+        for (const col of command.columns) {
+          await this.connection.statement(this.grammar.compileDropColumn(table, col));
+        }
+        break;
+
+      case 'renameColumn':
+        await this.connection.statement(
+          this.grammar.compileRenameColumn(table, command.from, command.to)
+        );
+        break;
+
+      case 'modifyColumn':
+        const modifyDef = this.grammar.compileColumn(command.column);
+        await this.connection.statement(this.grammar.compileModifyColumn(table, modifyDef));
+        break;
     }
   }
 
@@ -157,18 +174,13 @@ export class Builder {
   }
 
   /**
-   * Determine if the given table has a given index
+   * Determine if the given table has a given index.
+   * Delegates to the grammar for cross-dialect SQL generation.
    */
   async hasIndex(table: string, indexName: string): Promise<boolean> {
-    // This is database-specific, basic implementation
-    try {
-      const sql = `SHOW INDEX FROM \`${table}\` WHERE Key_name = ?`;
-      const results = await this.connection.select(sql, [indexName]);
-      return results.length > 0;
-    } catch (error) {
-      // Fallback for non-MySQL databases
-      return false;
-    }
+    const sql = this.grammar.compileIndexExists();
+    const results = await this.connection.select(sql, [table, indexName]);
+    return results.length > 0;
   }
 
   /**
@@ -184,6 +196,13 @@ export class Builder {
     }
     
     return results[0].data_type;
+  }
+
+  /**
+   * Alias for create() — Laravel-compatible API
+   */
+  async createTable(table: string, callback: (blueprint: Blueprint) => void): Promise<void> {
+    return this.create(table, callback);
   }
 
   /**
@@ -213,29 +232,26 @@ export class Builder {
       await this.connection.statement(sql);
     }
     
-    // Get commands for other operations (drop, rename, etc.)
+    // Get commands for other operations (indexes, foreign keys, drop, rename, etc.)
     const commands = blueprint.getCommands();
     for (const command of commands) {
-      // Handle different command types as needed
-      // For now, just skip them
+      await this.executeCommand(table, command);
     }
   }
 
   /**
-   * Drop all tables from the database
+   * Drop all tables from the database.
+   * Uses grammar-provided FK constraint SQL for cross-dialect support.
    */
   async dropAllTables(): Promise<void> {
+    await this.disableForeignKeyConstraints();
+
     const tables = await this.getAllTables();
-    
-    // Disable foreign key checks
-    await this.connection.statement('SET FOREIGN_KEY_CHECKS=0');
-    
     for (const table of tables) {
       await this.drop(table);
     }
-    
-    // Re-enable foreign key checks
-    await this.connection.statement('SET FOREIGN_KEY_CHECKS=1');
+
+    await this.enableForeignKeyConstraints();
   }
 
   /**

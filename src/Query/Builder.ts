@@ -3,6 +3,7 @@ import { Grammar } from './Grammars/Grammar';
 import { Processor } from './Processors/Processor';
 import { Expression } from './Expression';
 import { JoinClause } from './JoinClause';
+import { ModelNotFoundException, MultipleRecordsFoundException } from '../Errors/GuruORMError';
 
 /**
  * Query Builder - inspired by Laravel and Illuminate
@@ -30,6 +31,11 @@ export class Builder {
   protected returningColumns: string[] = []; // For RETURNING clause
   protected distinctFlag: boolean = false; // Track distinct queries
   
+  // ON CONFLICT clause (for PostgreSQL/SQLite upsert control)
+  protected conflictTarget: string[] | true | null = null;  // columns or true = no-target
+  protected conflictAction: 'ignore' | 'merge' | null = null;
+  protected conflictMerge: string[] | Record<string, any> | null = null; // columns or object of values
+
   // Bindings for prepared statements
   protected bindings: {
     select: any[];
@@ -240,10 +246,18 @@ export class Builder {
   /**
    * Add a basic where clause to the query
    */
-  where(column: string | Function, operator?: any, value?: any, boolean: 'and' | 'or' = 'and'): this {
+  where(column: string | Function | Record<string, any>, operator?: any, value?: any, boolean: 'and' | 'or' = 'and'): this {
     // Handle closure for nested where
     if (typeof column === 'function') {
       return this.whereNested(column, boolean);
+    }
+
+    // Handle plain object {col: val, col2: val2}
+    if (typeof column === 'object' && column !== null && !(column instanceof Expression)) {
+      for (const [k, v] of Object.entries(column as Record<string, any>)) {
+        this.where(k, '=', v, boolean);
+      }
+      return this;
     }
 
     // Handle two arguments (column, value)
@@ -255,9 +269,9 @@ export class Builder {
     // Handle null values - convert to IS NULL or IS NOT NULL
     if (value === null) {
       if (operator === '=' || operator === '==') {
-        return boolean === 'and' ? this.whereNull(column) : this.orWhereNull(column);
+        return boolean === 'and' ? this.whereNull(column as string) : this.orWhereNull(column as string);
       } else if (operator === '!=' || operator === '<>') {
-        return boolean === 'and' ? this.whereNotNull(column) : this.orWhereNotNull(column);
+        return boolean === 'and' ? this.whereNotNull(column as string) : this.orWhereNotNull(column as string);
       }
     }
 
@@ -320,7 +334,14 @@ export class Builder {
   /**
    * Add a "where in" clause to the query
    */
-  whereIn(column: string, values: any[], boolean: 'and' | 'or' = 'and', not = false): this {
+  whereIn(column: string, values: any[] | Function | Builder, boolean: 'and' | 'or' = 'and', not = false): this {
+    // Handle callback / closure — build a correlated subquery
+    if (typeof values === 'function') {
+      const sub = this.newQuery();
+      (values as Function)(sub);
+      return this.whereIn(column, sub, boolean, not);
+    }
+
     // Handle empty array - should return no results (or all results if NOT IN)
     if (Array.isArray(values) && values.length === 0) {
       if (not) {
@@ -481,7 +502,7 @@ export class Builder {
   /**
    * Add a where not exists clause
    */
-  whereNotExists(callback: (query: Builder) => void, boolean: 'and' | 'or' = 'and'): this {
+  whereNotExists(callback: ((query: Builder) => void) | Builder, boolean: 'and' | 'or' = 'and'): this {
     return this.whereExists(callback, boolean, true);
   }
 
@@ -1159,10 +1180,29 @@ export class Builder {
   }
 
   /**
-   * Get the current query value bindings
+   * Get the current query value bindings.
+   * Optimized: single-pass concat avoids Object.values() + .flat() overhead.
    */
   getBindings(): any[] {
-    return Object.values(this.bindings).flat();
+    const b = this.bindings;
+    // Hot path — most queries only use 'where' bindings
+    if (b.select.length === 0 && b.from.length === 0 && b.join.length === 0 &&
+        b.groupBy.length === 0 && b.having.length === 0 && b.order.length === 0 &&
+        b.union.length === 0 && b.unionOrder.length === 0) {
+      return b.where;
+    }
+    // General case — concat only non-empty arrays
+    let result: any[] = [];
+    if (b.select.length)     result = result.concat(b.select);
+    if (b.from.length)       result = result.concat(b.from);
+    if (b.join.length)       result = result.concat(b.join);
+    if (b.where.length)      result = result.concat(b.where);
+    if (b.groupBy.length)    result = result.concat(b.groupBy);
+    if (b.having.length)     result = result.concat(b.having);
+    if (b.order.length)      result = result.concat(b.order);
+    if (b.union.length)      result = result.concat(b.union);
+    if (b.unionOrder.length) result = result.concat(b.unionOrder);
+    return result;
   }
 
   /**
@@ -1227,11 +1267,11 @@ export class Builder {
     const results = await this.take(2).get(columns);
     
     if (results.length === 0) {
-      throw new Error('No query results for model.');
+      throw new ModelNotFoundException(this['fromTable'] || 'unknown');
     }
 
     if (results.length > 1) {
-      throw new Error('Multiple records found, but expected only one.');
+      throw new MultipleRecordsFoundException(2);
     }
 
     return results[0];
@@ -1251,7 +1291,7 @@ export class Builder {
     const result = await this.find(id, columns);
     
     if (!result) {
-      throw new Error(`No query results for model with ID: ${id}`);
+      throw new ModelNotFoundException(this['fromTable'] || 'unknown', [id]);
     }
 
     return result;
@@ -1299,7 +1339,28 @@ export class Builder {
     // If values is an array and the first element is an object (not an array), treat as multiple records
     // If values is an object, wrap it in an array for single record insert
     const valuesArray = Array.isArray(values) ? values : [values];
-    
+
+    // If an onConflict clause was chained, delegate to the correct compiler
+    if (this.conflictAction !== null) {
+      const sql = this.grammar.compileInsertOnConflict(
+        this, valuesArray, this.conflictTarget, this.conflictAction, this.conflictMerge
+      );
+      let bindings = this.grammar.prepareBindingsForInsert(this.bindings, valuesArray);
+      // If merge has a literal-values object, append those binding values after the INSERT bindings
+      if (
+        this.conflictAction === 'merge' &&
+        this.conflictMerge !== null &&
+        !Array.isArray(this.conflictMerge) &&
+        typeof this.conflictMerge === 'object'
+      ) {
+        bindings = [...bindings, ...Object.values(this.conflictMerge as Record<string, any>)];
+      }
+      if (this.returningColumns.length > 0) {
+        return this.connection.select(sql, bindings);
+      }
+      return this.connection.affectingStatement(sql, bindings) as any;
+    }
+
     const sql = this.grammar.compileInsert(this, valuesArray);
     const bindings = this.grammar.prepareBindingsForInsert(this.bindings, valuesArray);
 
@@ -1309,6 +1370,39 @@ export class Builder {
     }
 
     return this.connection.insert(sql, bindings);
+  }
+
+  /**
+   * Specify the conflict target column(s) for ON CONFLICT handling.
+   * Must be chained with .ignore() or .merge() BEFORE calling .insert().
+   *
+   * @example
+   *   // Ignore conflicts on the 'email' unique constraint
+   *   db.table('users').onConflict('email').insert({email:'x@y.com', ...})
+   *
+   *   // Upsert — update all non-conflict columns on conflict
+   *   db.table('products').onConflict('slug').merge().insert({slug:'a', price:9})
+   *
+   *   // Upsert — update only listed columns on conflict
+   *   db.table('products').onConflict('slug').merge(['price','stock_qty']).insert({...})
+   *
+   *   // Upsert with literal values object (not mirroring excluded.*)
+   *   db.table('products').onConflict('slug').merge({price: 99}).insert({...})
+   *
+   *   // Multi-column conflict target
+   *   db.table('votes').onConflict(['user_id','post_id']).merge(['count']).insert({...})
+   *
+   *   // No explicit target (catches any unique violation)
+   *   db.table('t').onConflict().ignore().insert({...})
+   */
+  onConflict(columns?: string | string[]): OnConflictBuilder {
+    let target: string[] | true;
+    if (columns === undefined || columns === null) {
+      target = true; // no explicit target → dialect decides
+    } else {
+      target = Array.isArray(columns) ? columns : [columns];
+    }
+    return new OnConflictBuilder(this, target);
   }
 
   /**
@@ -1378,7 +1472,8 @@ export class Builder {
       return 0;
     }
 
-    const valuesArray = Array.isArray(values[0]) ? values : [values];
+    // Normalise: single object → array, array of objects → use as-is
+    const valuesArray: Record<string, any>[] = Array.isArray(values) ? values : [values];
     
     const sql = this.grammar.compileUpsert(this, valuesArray, uniqueBy, update);
     const bindings = this.grammar.prepareBindingsForInsert(this.bindings, valuesArray);
@@ -1700,81 +1795,146 @@ export class Builder {
   }
 
   /**
-   * Paginate the results using cursor-based pagination
-   * More efficient for large datasets as it doesn't require counting total rows
+   * Paginate the results using cursor-based pagination.
+   *
+   * More efficient than offset pagination for large datasets because it uses
+   * a stable WHERE condition on an indexed column instead of OFFSET N.
+   *
+   * Supports composite cursors for tie-safe pagination:
+   *   DB.table('orders').orderBy('created_at','desc').orderBy('id','desc')
+   *     .cursorPaginate(25, { cursor, cursorColumns: ['created_at','id'] })
+   *
+   * Options:
+   *   cursor        – an opaque cursor string from a previous page result
+   *   cursorColumns – column(s) used for cursor comparison (default: 'id')
+   *   direction     – 'next' (default) | 'prev' for backward navigation
    */
-  async cursorPaginate(perPage: number = 15, cursor: string | null = null, cursorColumn: string = 'id'): Promise<{
+  async cursorPaginate(
+    perPage: number = 15,
+    options: {
+      cursor?: string | null;
+      cursorColumns?: string | string[];
+      direction?: 'next' | 'prev';
+    } = {},
+  ): Promise<{
     data: any[];
     perPage: number;
     nextCursor: string | null;
     prevCursor: string | null;
     hasMore: boolean;
+    hasNext: boolean;
+    hasPrev: boolean;
   }> {
-    const originalOrders = [...this.orders];
-    
-    // Ensure we have an order by the cursor column
-    const hasOrderByCursor = this.orders.some((order: any) => order.column === cursorColumn);
-    if (!hasOrderByCursor) {
-      this.orderBy(cursorColumn, 'asc');
+    const { cursor = null, cursorColumns = 'id', direction = 'next' } = options;
+    const isPrev = direction === 'prev';
+
+    // Normalise cursor columns to array
+    const cols: string[] = Array.isArray(cursorColumns) ? cursorColumns : [cursorColumns];
+
+    // Work on a CLONE so this builder is never mutated
+    const q = this.clone();
+
+    // Ensure each cursor column has an ORDER BY on the clone
+    for (const col of cols) {
+      const already = (q as any).orders.some((o: any) => o.column === col);
+      if (!already) q.orderBy(col, 'asc');
     }
 
-    // Clone the query to get the direction
-    const direction = this.orders.find((o: any) => o.column === cursorColumn)?.direction || 'asc';
+    // Capture the intended (forward) sort directions for each cursor column
+    const directions: string[] = cols.map(
+      col => (q as any).orders.find((o: any) => o.column === col)?.direction ?? 'asc',
+    );
 
-    // Apply cursor condition if provided
+    // For backward navigation, flip every ORDER BY direction on the clone
+    if (isPrev) {
+      (q as any).orders = (q as any).orders.map((o: any) => ({
+        ...o,
+        direction: o.direction === 'asc' ? 'desc' : 'asc',
+      }));
+    }
+
+    // Apply cursor WHERE condition using the original (forward) directions
     if (cursor) {
-      const decodedCursor = this.decodeCursor(cursor);
-      const operator = direction === 'asc' ? '>' : '<';
-      this.where(cursorColumn, operator, decodedCursor);
+      const decoded = this.decodeCursor(cursor);
+      // For forward (>) or backward (<) comparison
+      const getOp = (dir: string) => {
+        if (!isPrev) return dir === 'asc' ? '>' : '<';
+        return dir === 'asc' ? '<' : '>';
+      };
+
+      if (cols.length === 1) {
+        q.where(cols[0], getOp(directions[0]), decoded[cols[0]]);
+      } else {
+        // OR-expansion: (c1>v1) OR (c1=v1 AND c2>v2) OR …
+        q.where((sub: Builder) => {
+          for (let i = 0; i < cols.length; i++) {
+            sub.orWhere((inner: Builder) => {
+              for (let j = 0; j < i; j++) inner.where(cols[j], '=', decoded[cols[j]]);
+              inner.where(cols[i], getOp(directions[i]), decoded[cols[i]]);
+            });
+          }
+        });
+      }
     }
 
-    // Get one more record to check if there are more pages
-    const results = await this.limit(perPage + 1).get();
-    const hasMore = results.length > perPage;
+    // Fetch one extra to detect whether more pages exist in this direction
+    const results = await q.limit(perPage + 1).get();
+    const hasMoreInDirection = results.length > perPage;
+    if (hasMoreInDirection) results.pop();
 
+    // For backward navigation, reverse so results are in the natural forward order
+    if (isPrev) results.reverse();
+
+    // Build cursor tokens
     let nextCursor: string | null = null;
     let prevCursor: string | null = null;
 
-    if (hasMore) {
-      results.pop(); // Remove the extra record
-    }
-
     if (results.length > 0) {
-      const lastRecord = results[results.length - 1];
-      const firstRecord = results[0];
-      
-      if (hasMore) {
-        nextCursor = this.encodeCursor(lastRecord[cursorColumn]);
-      }
-      
-      if (cursor) {
-        prevCursor = this.encodeCursor(firstRecord[cursorColumn]);
+      const first = results[0];
+      const last  = results[results.length - 1];
+
+      if (!isPrev) {
+        if (hasMoreInDirection) {
+          nextCursor = this.encodeCursor(Object.fromEntries(cols.map(c => [c, last[c]])));
+        }
+        prevCursor = cursor
+          ? this.encodeCursor(Object.fromEntries(cols.map(c => [c, first[c]])))
+          : null;
+      } else {
+        // Backward: the "next" token points at the last row (for forward nav),
+        // the "prev" token points at the first row (to keep going backward)
+        nextCursor = this.encodeCursor(Object.fromEntries(cols.map(c => [c, last[c]])));
+        prevCursor = hasMoreInDirection
+          ? this.encodeCursor(Object.fromEntries(cols.map(c => [c, first[c]])))
+          : null;
       }
     }
 
-    // Restore original orders
-    this.orders = originalOrders;
+    const hasPrev = !isPrev ? cursor !== null && cursor !== undefined && cursor !== '' : hasMoreInDirection;
+    const hasNext = !isPrev ? hasMoreInDirection : nextCursor !== null;
 
     return {
       data: results,
       perPage,
       nextCursor,
       prevCursor,
-      hasMore,
+      hasMore: hasMoreInDirection,
+      hasNext,
+      hasPrev,
     };
   }
 
   /**
-   * Encode a cursor value
+   * Encode a cursor value to a URL-safe base64 string.
    */
-  protected encodeCursor(value: any): string {
+  protected encodeCursor(value: Record<string, any>): string {
     return Buffer.from(JSON.stringify(value)).toString('base64');
   }
 
   /**
-   * Decode a cursor value
+   * Decode a base64 cursor string back to its key/value map.
    */
-  protected decodeCursor(cursor: string): any {
+  protected decodeCursor(cursor: string): Record<string, any> {
     return JSON.parse(Buffer.from(cursor, 'base64').toString('utf8'));
   }
 
@@ -1788,7 +1948,7 @@ export class Builder {
   /**
    * Chunk the results of the query
    */
-  async chunk(count: number, callback: (results: any[], page: number) => boolean | void): Promise<boolean> {
+  async chunk(count: number, callback: (results: any[], page: number) => boolean | void | Promise<boolean | void>): Promise<boolean> {
     let page = 1;
 
     do {
@@ -1798,7 +1958,7 @@ export class Builder {
         break;
       }
 
-      if (callback(results, page) === false) {
+      if (await callback(results, page) === false) {
         return false;
       }
 
@@ -1811,7 +1971,7 @@ export class Builder {
   /**
    * Chunk the results of a query by comparing IDs
    */
-  async chunkById(count: number, callback: (results: any[], lastId?: any) => boolean | void, column: string = 'id'): Promise<boolean> {
+  async chunkById(count: number, callback: (results: any[], lastId?: any) => boolean | void | Promise<boolean | void>, column: string = 'id'): Promise<boolean> {
     let lastId: any = null;
 
     do {
@@ -1827,7 +1987,7 @@ export class Builder {
         break;
       }
 
-      if (callback(results, lastId) === false) {
+      if (await callback(results, lastId) === false) {
         return false;
       }
 
@@ -2029,5 +2189,47 @@ export class Builder {
     };
     
     return cloned;
+  }
+}
+
+/**
+ * Fluent sub-builder for ON CONFLICT clauses.
+ * Returned by `Builder.onConflict()` — call `.ignore()` or `.merge()` to finalise.
+ */
+export class OnConflictBuilder {
+  constructor(
+    private readonly builder: Builder,
+    private readonly target: string[] | true,
+  ) {}
+
+  /**
+   * ON CONFLICT ... DO NOTHING
+   */
+  ignore(): Builder {
+    (this.builder as any).conflictTarget = this.target;
+    (this.builder as any).conflictAction = 'ignore';
+    (this.builder as any).conflictMerge = null;
+    return this.builder;
+  }
+
+  /**
+   * ON CONFLICT ... DO UPDATE SET ...
+   *
+   * @param updates  - undefined  → mirror all inserted columns (excluded.*)
+   *                 - string[]  → mirror only these columns (excluded.*)
+   *                 - object    → set literal values { col: value, ... }
+   */
+  merge(updates?: string[] | Record<string, any>): Builder {
+    (this.builder as any).conflictTarget = this.target;
+    (this.builder as any).conflictAction = 'merge';
+    (this.builder as any).conflictMerge = updates ?? null;
+    return this.builder;
+  }
+
+  // Guard: calling .then() without .ignore()/.merge() throws a helpful error
+  then(): never {
+    throw new Error(
+      'Incomplete onConflict clause. .onConflict() must be followed by .ignore() or .merge() before .insert()'
+    );
   }
 }

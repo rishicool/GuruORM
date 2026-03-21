@@ -14,6 +14,10 @@ export * from './Query/JoinClause';
 
 export { Builder as SchemaBuilder } from './Schema/Builder';
 export * from './Schema/Blueprint';
+export { Grammar as SchemaGrammar } from './Schema/Grammars/Grammar';
+export { Grammar as MySqlSchemaGrammar } from './Schema/Grammars/MySqlGrammar';
+export { PostgresGrammar as PostgresSchemaGrammar } from './Schema/Grammars/PostgresGrammar';
+export { SqliteGrammar as SqliteSchemaGrammar } from './Schema/Grammars/SqliteGrammar';
 
 export * from './Eloquent/Model';
 export { Builder as EloquentBuilder } from './Eloquent/Builder';
@@ -24,14 +28,14 @@ export { SoftDeletingScope, HasGlobalScopes } from './Eloquent/Scope';
 export type { Observer } from './Eloquent/Observer';
 export { ObserverRegistry } from './Eloquent/Observer';
 
-// Model Concerns
-export { SoftDeleteModel } from './Eloquent/Concerns/SoftDeletes';
-export { HasUuids, UuidModel, HasUlids, UlidModel } from './Eloquent/Concerns/HasUuids';
-export type { PrunableModel, MassPrunableModel } from './Eloquent/Concerns/Prunable';
+// Model Concerns — both mixin functions (composable) and class-based exports (backward compat)
+export { SoftDeletes, SoftDeleteModel } from './Eloquent/Concerns/SoftDeletes';
+export { HasUuids, HasUlids, UuidModel, UlidModel } from './Eloquent/Concerns/HasUuids';
+export { Prunable, MassPrunable, PrunableModel, MassPrunableModel } from './Eloquent/Concerns/Prunable';
 
 // Custom Casts
 export type { CastsAttributes } from './Eloquent/Casts/CastsAttributes';
-export { ArrayCast, JsonCast, EncryptedCast, AsCollectionCast, AsStringableCast } from './Eloquent/Casts/CastsAttributes';
+export { ArrayCast, JsonCast, EncryptedCast, LegacyEncryptedCast, AsCollectionCast, AsStringableCast } from './Eloquent/Casts/CastsAttributes';
 
 // Relations
 export { Relation } from './Eloquent/Relations/Relation';
@@ -59,6 +63,16 @@ export * from './Support/helpers';
 export type { QueryLog, QueryListener } from './Support/QueryLogger';
 export { QueryLogger } from './Support/QueryLogger';
 
+// Errors — structured exception hierarchy
+export {
+  GuruORMError,
+  QueryException,
+  ModelNotFoundException,
+  ConnectionException,
+  RelationNotFoundException,
+  MultipleRecordsFoundException,
+} from './Errors/GuruORMError';
+
 // Import Manager for instance creation
 import { Manager } from './Capsule/Manager';
 
@@ -67,18 +81,47 @@ export { Manager as Capsule } from './Capsule/Manager';
 export { Manager } from './Capsule/Manager';
 
 // Create a lazy-initialized singleton that uses Manager.getInstance()
+// Pre-binds hot methods so that this.xxx inside Manager methods are
+// direct property accesses instead of Proxy trampoline calls.
+let _cachedManager: Manager | null = null;
+let _select: Function | null = null;
+let _table: Function | null = null;
+let _transaction: Function | null = null;
+
+function _initDB(): void {
+  try {
+    _cachedManager = Manager.getInstance();
+  } catch {
+    _cachedManager = new Manager();
+    _cachedManager.setAsGlobal();
+  }
+  _select = _cachedManager.select.bind(_cachedManager);
+  _table = _cachedManager.table.bind(_cachedManager);
+  _transaction = _cachedManager.transaction.bind(_cachedManager);
+}
+
 export const DB = new Proxy({} as Manager, {
-  get(target, prop) {
-    try {
-      // Try to get the global instance set by MigrationRunner or user code
-      const instance = Manager.getInstance();
-      return (instance as any)[prop];
-    } catch (e) {
-      // No global instance yet, create one
-      const instance = new Manager();
-      instance.setAsGlobal();
-      return (instance as any)[prop];
+  get(_target, prop) {
+    if (_cachedManager) {
+      switch (prop) {
+        case 'select': return _select;
+        case 'table': return _table;
+        case 'transaction': return _transaction;
+        default: return (_cachedManager as any)[prop];
+      }
     }
+    _initDB();
+    switch (prop) {
+      case 'select': return _select;
+      case 'table': return _table;
+      case 'transaction': return _transaction;
+      default: return (_cachedManager as any)[prop];
+    }
+  },
+  set(_target, prop, value) {
+    if (!_cachedManager) _initDB();
+    (_cachedManager as any)[prop] = value;
+    return true;
   }
 });
 

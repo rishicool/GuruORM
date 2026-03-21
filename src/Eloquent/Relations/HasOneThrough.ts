@@ -70,17 +70,7 @@ export class HasOneThrough extends Relation {
       this.query.where(this.getQualifiedFirstKeyName(), '=', localValue);
     }
     
-    // Apply soft delete constraint
-    const relatedConstructor = this.related.constructor as any;
-    const usesSoftDeletes = relatedConstructor.softDeletes === true || 
-                            relatedConstructor.prototype?.softDeletes === true;
-    
-    if (usesSoftDeletes) {
-      const deletedAtColumn = relatedConstructor.deletedAt || 
-                              relatedConstructor.DELETED_AT || 
-                              'deleted_at';
-      this.query.whereNull(`${this.related.getTable()}.${deletedAtColumn}`);
-    }
+    this.applySoftDeleteConstraint(this.related.getTable());
   }
 
   /**
@@ -115,17 +105,7 @@ export class HasOneThrough extends Relation {
     const keys = models.map(model => model.getAttribute(this.localKey));
     this.query.whereIn(this.getQualifiedFirstKeyName(), keys);
     
-    // Apply soft delete constraint for eager loading
-    const relatedConstructor = this.related.constructor as any;
-    const usesSoftDeletes = relatedConstructor.softDeletes === true || 
-                            relatedConstructor.prototype?.softDeletes === true;
-    
-    if (usesSoftDeletes) {
-      const deletedAtColumn = relatedConstructor.deletedAt || 
-                              relatedConstructor.DELETED_AT || 
-                              'deleted_at';
-      this.query.whereNull(`${this.related.getTable()}.${deletedAtColumn}`);
-    }
+    this.applySoftDeleteConstraint(this.related.getTable());
   }
 
   /**

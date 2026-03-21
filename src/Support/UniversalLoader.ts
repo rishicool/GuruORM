@@ -2,6 +2,7 @@ import { pathToFileURL } from 'url';
 import { createRequire } from 'module';
 import * as fs from 'fs';
 import * as path from 'path';
+import { getFilename } from './compat.js';
 
 /**
  * Universal Module Loader
@@ -64,7 +65,7 @@ export class UniversalLoader {
   private static loadCJSModule(filePath: string): any {
     try {
       // Use dynamic import.meta.url wrapped in any to avoid TS errors
-      const require = createRequire(__filename);
+      const require = createRequire(getFilename());
       // Clear cache to allow reloading
       delete require.cache[require.resolve(filePath)];
       return require(filePath);

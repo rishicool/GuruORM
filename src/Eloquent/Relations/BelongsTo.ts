@@ -8,13 +8,17 @@ import { Builder } from '../Builder';
 export class BelongsTo extends Relation {
   protected foreignKey: string;
   protected ownerKey: string;
+  protected relationName: string;
   protected withDefaultValue: any = null;
   protected withDefaultCallback: Function | null = null;
 
-  constructor(query: Builder, parent: Model, foreignKey: string, ownerKey: string) {
+  constructor(query: Builder, parent: Model, foreignKey: string, ownerKey: string, relationName?: string) {
     super(query, parent);
     this.foreignKey = foreignKey;
     this.ownerKey = ownerKey;
+    // Derive relation name from foreignKey convention: 'user_id' → 'user'
+    // This matches Laravel's naming convention for BelongsTo relations.
+    this.relationName = relationName || foreignKey.replace(/_id$/, '');
     this.addConstraints();
   }
 
@@ -24,18 +28,7 @@ export class BelongsTo extends Relation {
   addConstraints(): void {
     if (this.parent.modelExists()) {
       this.query.where(this.ownerKey, '=', this.parent.getAttribute(this.foreignKey));
-      
-      // Apply soft delete constraint
-      const relatedConstructor = this.related.constructor as any;
-      const usesSoftDeletes = relatedConstructor.softDeletes === true || 
-                              relatedConstructor.prototype?.softDeletes === true;
-      
-      if (usesSoftDeletes) {
-        const deletedAtColumn = relatedConstructor.deletedAt || 
-                                relatedConstructor.DELETED_AT || 
-                                'deleted_at';
-        this.query.whereNull(deletedAtColumn);
-      }
+      this.applySoftDeleteConstraint();
     }
   }
 
@@ -51,17 +44,7 @@ export class BelongsTo extends Relation {
       this.query.whereIn(this.ownerKey, keys);
     }
     
-    // Apply soft delete constraint for eager loading
-    const relatedConstructor = this.related.constructor as any;
-    const usesSoftDeletes = relatedConstructor.softDeletes === true || 
-                            relatedConstructor.prototype?.softDeletes === true;
-    
-    if (usesSoftDeletes) {
-      const deletedAtColumn = relatedConstructor.deletedAt || 
-                              relatedConstructor.DELETED_AT || 
-                              'deleted_at';
-      this.query.whereNull(deletedAtColumn);
-    }
+    this.applySoftDeleteConstraint();
   }
 
   /**
@@ -131,7 +114,9 @@ export class BelongsTo extends Relation {
     }
 
     if (typeof this.withDefaultValue === 'object') {
-      return new (instance.constructor as any)(this.withDefaultValue);
+      const model = new (instance.constructor as any)();
+      model.forceFill(this.withDefaultValue);
+      return model;
     }
 
     return instance;
@@ -150,12 +135,14 @@ export class BelongsTo extends Relation {
   }
 
   /**
-   * Associate the model instance to the given parent
+   * Associate the model instance to the given parent.
+   * Sets the foreign key and caches the related model under
+   * the relation name (e.g. 'user' for foreign key 'user_id').
    */
   associate(model: Model | null): Model {
     if (model) {
       this.parent.setAttribute(this.foreignKey, model.getAttribute(this.ownerKey));
-      this.parent['relations'][this.ownerKey] = model;
+      this.parent['relations'][this.relationName] = model;
     } else {
       this.dissociate();
     }
@@ -164,10 +151,28 @@ export class BelongsTo extends Relation {
   }
 
   /**
-   * Dissociate previously associated model from the given parent
+   * Dissociate previously associated model from the given parent.
+   * Clears both the foreign key and the relation cache.
    */
   dissociate(): Model {
     this.parent.setAttribute(this.foreignKey, null);
+    this.parent['relations'][this.relationName] = null;
     return this.parent;
+  }
+
+  /**
+   * Determine if the related model is the given model instance
+   */
+  is(model: Model | null): boolean {
+    if (!model) return false;
+    return this.parent.getAttribute(this.foreignKey) === model.getAttribute(this.ownerKey)
+      && this.related.getTable() === model.getTable();
+  }
+
+  /**
+   * Determine if the related model is NOT the given model instance
+   */
+  isNot(model: Model | null): boolean {
+    return !this.is(model);
   }
 }

@@ -138,17 +138,18 @@ export class Factory<T extends Model> {
     for (let i = 0; i < this.count; i++) {
       const model = new this.model();
       
-      // Apply definition attributes
+      // Apply definition attributes via forceFill to go through
+      // setAttribute / casts / mutators while bypassing fillable guards
       const definition = this.definition();
-      Object.assign(model, definition);
+      model.forceFill(definition);
 
       // Apply states
       for (const state of this.states) {
-        Object.assign(model, state);
+        model.forceFill(state);
       }
 
       // Apply provided attributes
-      Object.assign(model, attributes);
+      model.forceFill(attributes);
 
       await this.runAfterMaking(model);
       models.push(model);

@@ -49,20 +49,8 @@ export class MorphMany extends Relation {
     if (this.parent.modelExists()) {
       this.query
         .where(this.foreignKey, '=', this.parent.getAttribute(this.localKey))
-        .where(this.morphType, '=', this.parent.constructor.name);
-      
-      // Automatically apply soft delete constraint if related model uses soft deletes
-      const relatedModel = this.related;
-      const relatedConstructor = relatedModel.constructor as any;
-      const usesSoftDeletes = relatedConstructor.softDeletes === true || 
-                              relatedConstructor.prototype?.softDeletes === true;
-      
-      if (usesSoftDeletes) {
-        const deletedAtColumn = relatedConstructor.deletedAt || 
-                                relatedConstructor.DELETED_AT || 
-                                'deleted_at';
-        this.query.whereNull(deletedAtColumn);
-      }
+        .where(this.morphType, '=', (this.parent.constructor as typeof Model).getMorphClass());
+      this.applySoftDeleteConstraint();
     }
   }
 
@@ -77,20 +65,10 @@ export class MorphMany extends Relation {
     if (keys.length > 0) {
       this.query
         .whereIn(this.foreignKey, keys)
-        .where(this.morphType, '=', this.parent.constructor.name);
+        .where(this.morphType, '=', (this.parent.constructor as typeof Model).getMorphClass());
     }
     
-    // Apply soft delete constraint for eager loading too
-    const relatedConstructor = this.related.constructor as any;
-    const usesSoftDeletes = relatedConstructor.softDeletes === true || 
-                            relatedConstructor.prototype?.softDeletes === true;
-    
-    if (usesSoftDeletes) {
-      const deletedAtColumn = relatedConstructor.deletedAt || 
-                              relatedConstructor.DELETED_AT || 
-                              'deleted_at';
-      this.query.whereNull(deletedAtColumn);
-    }
+    this.applySoftDeleteConstraint();
   }
 
   /**
@@ -122,7 +100,7 @@ export class MorphMany extends Relation {
 
     for (const model of models) {
       const foreignKeyValue = model.getAttribute(this.localKey);
-      const morphTypeValue = model.constructor.name;
+      const morphTypeValue = (model.constructor as typeof Model).getMorphClass();
       const compositeKey = `${foreignKeyValue}::${morphTypeValue}`;
       if (dictionary[compositeKey]) {
         model['relations'][relation] = new Collection(...dictionary[compositeKey]);
@@ -152,7 +130,7 @@ export class MorphMany extends Relation {
    */
   async create(attributes: Record<string, any> = {}): Promise<Model> {
     attributes[this.foreignKey] = this.parent.getAttribute(this.localKey);
-    attributes[this.morphType] = this.parent.constructor.name;
+    attributes[this.morphType] = (this.parent.constructor as typeof Model).getMorphClass();
     
     return this.query.create(attributes);
   }

@@ -41,6 +41,13 @@ export class Collection<T = any> extends Array<T> {
   }
 
   /**
+   * Get the number of items in the collection
+   */
+  count(): number {
+    return this.length;
+  }
+
+  /**
    * Determine if the collection is not empty
    */
   isNotEmpty(): boolean {
@@ -69,10 +76,12 @@ export class Collection<T = any> extends Array<T> {
   }
 
   /**
-   * Find a model by its primary key
+   * Find a model by its primary key.
+   * Uses Array.prototype.find explicitly to avoid infinite recursion
+   * since this method shadows Array's native find().
    */
   find(key: any): T | undefined {
-    return this.find((item: any) => {
+    return Array.prototype.find.call(this, (item: any) => {
       if (item instanceof Model) {
         return item.getKey() === key;
       }
@@ -261,5 +270,55 @@ export class Collection<T = any> extends Array<T> {
       default:
         return false;
     }
+  }
+
+  /**
+   * Get a dictionary keyed by the given key
+   */
+  getDictionary(key?: string): Record<string, T> {
+    const dict: Record<string, T> = {};
+    for (const item of this) {
+      const k = key
+        ? (item instanceof Model ? item.getAttribute(key) : (item as any)[key])
+        : (item instanceof Model ? item.getKey() : (item as any).id);
+      if (k != null) {
+        dict[String(k)] = item;
+      }
+    }
+    return dict;
+  }
+
+  /**
+   * Return only models with keys matching the given IDs
+   */
+  only(ids: any[]): Collection<T> {
+    const idSet = new Set(ids.map(String));
+    return Collection.make(
+      this.filter((item: any) => {
+        const k = item instanceof Model ? item.getKey() : item.id;
+        return idSet.has(String(k));
+      })
+    );
+  }
+
+  /**
+   * Return all models except those with keys matching the given IDs
+   */
+  except(ids: any[]): Collection<T> {
+    const idSet = new Set(ids.map(String));
+    return Collection.make(
+      this.filter((item: any) => {
+        const k = item instanceof Model ? item.getKey() : item.id;
+        return !idSet.has(String(k));
+      })
+    );
+  }
+
+  /**
+   * Map each item into a new class
+   */
+  mapInto<U>(classType: new (item: T) => U): Collection<U> {
+    const items = Array.from(this).map(item => new classType(item));
+    return Collection.make(items) as unknown as Collection<U>;
   }
 }

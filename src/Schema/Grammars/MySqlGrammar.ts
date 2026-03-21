@@ -16,7 +16,7 @@ export class Grammar extends BaseGrammar {
   }
 
   /**
-   * Compile a rename table command
+   * Compile a rename table command (MySQL uses RENAME TABLE syntax)
    */
   compileRenameTable(from: string, to: string): string {
     return `rename table ${this.wrapTable(from)} to ${this.wrapTable(to)}`;
@@ -34,5 +34,30 @@ export class Grammar extends BaseGrammar {
    */
   compileDisableForeignKeyConstraints(): string {
     return 'SET FOREIGN_KEY_CHECKS=0;';
+  }
+
+  /**
+   * Compile a create table command with MySQL-specific options (engine, charset, collation, comment)
+   */
+  compileCreateTable(table: string, columns: string[], options: any = {}): string {
+    let sql = super.compileCreateTable(table, columns, options);
+
+    if (options.engine) {
+      sql += ` engine = ${options.engine}`;
+    }
+
+    if (options.charset) {
+      sql += ` default charset = ${options.charset}`;
+    }
+
+    if (options.collation) {
+      sql += ` collate = ${options.collation}`;
+    }
+
+    if (options.comment) {
+      sql += ` comment = '${this.escapeString(options.comment)}'`;
+    }
+
+    return sql;
   }
 }

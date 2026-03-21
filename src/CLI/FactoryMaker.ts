@@ -1,5 +1,6 @@
 import * as fs from 'fs';
 import * as path from 'path';
+import { getDirname, getRequire } from '../Support/compat.js';
 
 /**
  * Factory file generator
@@ -8,7 +9,7 @@ export class FactoryMaker {
   protected stubPath: string;
 
   constructor(stubPath?: string) {
-    this.stubPath = stubPath || path.join(__dirname, '../../stubs/factory.stub');
+    this.stubPath = stubPath || path.join(getDirname(), '../../stubs/factory.stub');
   }
 
   /**
@@ -29,14 +30,12 @@ export class FactoryMaker {
    * Get the class name for the factory
    */
   protected getClassName(name: string): string {
-    let className = name
-      .split(/[_-]/)
-      .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+    let className = name.replace(/Factory$/i, '')
+      .split(/[_\-\s]+/)
+      .map(word => word.charAt(0).toUpperCase() + word.slice(1))
       .join('');
     
-    if (!className.endsWith('Factory')) {
-      className += 'Factory';
-    }
+    className += 'Factory';
     
     return className;
   }

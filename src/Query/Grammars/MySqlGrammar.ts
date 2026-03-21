@@ -6,14 +6,21 @@ import { Builder } from '../Builder';
  */
 export class Grammar extends BaseGrammar {
   /**
-   * Wrap a single string in keyword identifiers
+   * Wrap a single string in keyword identifiers (MySQL uses backticks).
+   * Delegates to the custom wrapIdentifier hook when configured.
    */
   protected wrapValue(value: string): string {
     if (value === '*') {
       return value;
     }
 
-    return `\`${value.replace(/`/g, '``')}\``;
+    const origImpl = (v: string) => `\`${v.replace(/`/g, '``')}\``;
+
+    if (this.customWrapIdentifier) {
+      return this.customWrapIdentifier(value, origImpl);
+    }
+
+    return origImpl(value);
   }
 
   /**
@@ -23,6 +30,28 @@ export class Grammar extends BaseGrammar {
    */
   compileInsertGetId(query: Builder, values: any, sequence?: string): string {
     return this.compileInsert(query, [values]);
+  }
+
+  /**
+   * Compile an "insert ignore" statement into SQL.
+   * MySQL uses INSERT IGNORE syntax.
+   */
+  compileInsertOrIgnore(query: Builder, values: any[]): string {
+    return this.compileInsert(query, values).replace('insert', 'insert ignore');
+  }
+
+  /**
+   * Compile an upsert statement into SQL.
+   * MySQL uses ON DUPLICATE KEY UPDATE syntax.
+   */
+  compileUpsert(query: Builder, values: any[], uniqueBy: string[], update?: string[]): string {
+    const insert = this.compileInsert(query, values);
+    const columns = update || Object.keys(values[0]).filter(k => !uniqueBy.includes(k));
+    const updateClause = columns
+      .map(col => `${this.wrap(col)} = values(${this.wrap(col)})`)
+      .join(', ');
+
+    return `${insert} on duplicate key update ${updateClause}`;
   }
 
   /**

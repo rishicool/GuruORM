@@ -1,6 +1,8 @@
 import { Builder as QueryBuilder } from '../Query/Builder';
 import { Model } from './Model';
 import { Collection } from './Collection';
+import { ModelNotFoundException, RelationNotFoundException } from '../Errors/GuruORMError';
+import { snakeCase } from '../Support/helpers';
 
 /**
  * Eloquent Builder - inspired by Laravel and Illuminate
@@ -11,6 +13,7 @@ export class Builder {
   protected model!: Model;
   protected eagerLoad: Record<string, Function> = {};
   protected localMacros: Record<string, Function> = {};
+  protected removedScopes: Set<string> = new Set();
   protected passthru = [
     'insert', 'insertGetId', 'insertOrIgnore', 'update', 'delete', 'truncate',
     'exists', 'doesntExist', 'count', 'min', 'max', 'avg', 'sum',
@@ -74,13 +77,13 @@ export class Builder {
 
     if (Array.isArray(id)) {
       if (result.count() !== id.length) {
-        throw new Error('Some models were not found');
+        throw new ModelNotFoundException(this.model.constructor.name, id);
       }
       return result;
     }
 
     if (!result) {
-      throw new Error(`No query results for model with ID: ${id}`);
+      throw new ModelNotFoundException(this.model.constructor.name, [id]);
     }
 
     return result;
@@ -101,7 +104,7 @@ export class Builder {
     const model = await this.first(columns);
 
     if (!model) {
-      throw new Error('No query results for model');
+      throw new ModelNotFoundException(this.model.constructor.name);
     }
 
     return model;
@@ -173,7 +176,7 @@ export class Builder {
     // If we have eager loads, load them now
     if (Object.keys(this.eagerLoad).length > 0) {
       const eagerModels = await builder.eagerLoadRelations(models as any[]);
-      return new Collection(...eagerModels);
+      return Collection.from(eagerModels) as Collection<any>;
     }
 
     return models;
@@ -192,7 +195,13 @@ export class Builder {
    */
   hydrate(items: any[]): Collection<any> {
     const models = items.map(item => this.newModelInstance(item, true));
-    return new Collection(...models);
+    // Collection.from avoids spread-based stack overflow with large result sets
+    const col = Collection.from(models) as Collection<any>;
+    // Fire 'retrieved' event for each hydrated model (non-blocking microtask)
+    for (const model of models) {
+      model.fireModelEvent('retrieved', false).catch(() => {});
+    }
+    return col;
   }
 
   /**
@@ -234,7 +243,6 @@ export class Builder {
     const firstRelation = segments[0];
     
     // Check if the first level relation needs to be loaded
-    // FIXED: Check if relation is already loaded on models, not just in eagerLoad
     const needsLoad = !this.eagerLoad[firstRelation] && 
                       models.some(model => !model.relations?.[firstRelation]);
     
@@ -242,26 +250,83 @@ export class Builder {
       models = await this.eagerLoadRelation(models, firstRelation, (q: any) => q);
     }
     
-    // If there are more segments, recursively load nested relations
+    // If there are more segments, batch-load nested relations
     if (segments.length > 1) {
       const nestedRelation = segments.slice(1).join('.');
       
-      // For each model, load nested relations on the first level relation
+      // Collect ALL related models across all parents into a single array
+      const allRelatedModels: any[] = [];
+      
       for (const model of models) {
-        // Access the relation through the proxy (model[firstRelation] will use getAttribute)
         const relation = model.relations?.[firstRelation];
         
         if (relation) {
           if (Array.isArray(relation) || (relation && typeof relation[Symbol.iterator] === 'function')) {
-            // If it's a collection or iterable, load nested relations for each item
             for (const relatedModel of relation) {
               if (relatedModel && typeof relatedModel.load === 'function') {
-                await relatedModel.load(nestedRelation);
+                allRelatedModels.push(relatedModel);
               }
             }
           } else if (relation && typeof relation.load === 'function') {
-            // If it's a single model, load the nested relation
-            await relation.load(nestedRelation);
+            allRelatedModels.push(relation);
+          }
+        }
+      }
+      
+      // Batch load: build a single query for all collected models
+      // instead of N individual .load() calls
+      if (allRelatedModels.length > 0) {
+        const firstModel = allRelatedModels[0];
+        const nestedSegments = nestedRelation.split('.');
+        const nextRelation = nestedSegments[0];
+        
+        // Check if the method exists on the related model
+        const method = Reflect.get(Object.getPrototypeOf(firstModel), nextRelation);
+        if (typeof method === 'function') {
+          const relationInstance = method.call(firstModel);
+          if (relationInstance && typeof relationInstance.addEagerConstraints === 'function') {
+            // Use eager loading to batch the query
+            if (typeof relationInstance.initRelation === 'function') {
+              relationInstance.initRelation(allRelatedModels, nextRelation);
+            }
+            relationInstance.addEagerConstraints(allRelatedModels);
+            constraints(relationInstance.getQuery());
+            const results = await relationInstance.getQuery().get();
+            relationInstance.match(allRelatedModels, results, nextRelation);
+            
+            // If there are deeper nested relations, recurse on the collected child models
+            if (nestedSegments.length > 1) {
+              const deeperRelation = nestedSegments.slice(1).join('.');
+              const deeperModels: any[] = [];
+              for (const m of allRelatedModels) {
+                const rel = m.relations?.[nextRelation];
+                if (rel) {
+                  if (Array.isArray(rel) || (rel && typeof rel[Symbol.iterator] === 'function')) {
+                    for (const r of rel) {
+                      if (r && typeof r.load === 'function') deeperModels.push(r);
+                    }
+                  } else if (typeof rel.load === 'function') {
+                    deeperModels.push(rel);
+                  }
+                }
+              }
+              // Recursively batch-load deeper levels
+              if (deeperModels.length > 0) {
+                const deeperFirst = deeperModels[0];
+                const deeperMethod = Reflect.get(Object.getPrototypeOf(deeperFirst), deeperRelation.split('.')[0]);
+                if (typeof deeperMethod === 'function') {
+                  // Fallback to individual load for deep nesting
+                  for (const dm of deeperModels) {
+                    await dm.load(deeperRelation);
+                  }
+                }
+              }
+            }
+          } else {
+            // Fallback: load individually
+            for (const relatedModel of allRelatedModels) {
+              await relatedModel.load(nestedRelation);
+            }
           }
         }
       }
@@ -287,7 +352,9 @@ export class Builder {
     relation.addEagerConstraints(models);
     
     // Apply user-defined constraints AFTER eager constraints
-    constraints(relation.getQuery());
+    // Pass the relation as second argument so callbacks can call
+    // relation.withTrashed() / relation.onlyTrashed()
+    constraints(relation.getQuery(), relation);
     
     // Get results
     const results = await relation.getQuery().get();
@@ -305,14 +372,14 @@ export class Builder {
     const method = Reflect.get(Object.getPrototypeOf(this.model), name);
     
     if (typeof method !== 'function') {
-      throw new Error(`Relation '${name}' is not defined on model.`);
+      throw new RelationNotFoundException(this.model.constructor.name, name);
     }
     
     // Call the relationship method on the model
     const relation = method.call(this.model);
     
     if (!relation || typeof relation.addEagerConstraints !== 'function') {
-      throw new Error(`Relation '${name}' is not defined on model.`);
+      throw new RelationNotFoundException(this.model.constructor.name, name);
     }
     
     return relation;
@@ -409,8 +476,13 @@ export class Builder {
       const relationInstance = relationMethod.call(this.model);
       
       // Determine the column name for the aggregate result
-      // Default: {relation}_{aggregate}_{column} or {alias}
-      const aggregateColumn = alias || `${relation}_${aggregateFunction}_${column === '*' ? 'count' : column}`;
+      // Default: {snake_relation}_count for COUNT(*), otherwise {snake_relation}_{aggregate}_{column}
+      const snakeRelation = snakeCase(relation);
+      const aggregateColumn = alias || (
+        aggregateFunction === 'count' && column === '*'
+          ? `${snakeRelation}_count`
+          : `${snakeRelation}_${aggregateFunction}_${column}`
+      );
 
       // Build the correlated subquery based on relation type
       let subquery: any;
@@ -522,7 +594,31 @@ export class Builder {
 
     // Get the relation instance
     const relationInstance = this.getRelation(relation);
-    
+    const parentTable = this.model.getTable();
+
+    // BelongsToMany — use pivot table EXISTS
+    if (relationInstance.constructor.name === 'BelongsToMany') {
+      const pivotTable = (relationInstance as any).table;
+      const foreignPivotKey = (relationInstance as any).foreignPivotKey;
+      const relatedPivotKey = (relationInstance as any).relatedPivotKey;
+      const parentKey = (relationInstance as any).parentKey || this.model.getKeyName();
+      const relatedTable = relationInstance.getRelated().getTable();
+      const relatedKey = (relationInstance as any).relatedKey || 'id';
+
+      const pivotQuery = this.query.newQuery()
+        .from(pivotTable)
+        .whereRaw(`"${pivotTable}"."${foreignPivotKey}" = "${parentTable}"."${parentKey}"`);
+
+      if (callback) {
+        // Join related table so callback can filter on it
+        pivotQuery.join(relatedTable, `${relatedTable}.${relatedKey}`, '=', `${pivotTable}.${relatedPivotKey}`);
+        callback(pivotQuery);
+      }
+
+      this.query.whereExists(pivotQuery, boolean);
+      return this;
+    }
+
     // Get the related query builder
     const relationQuery = relationInstance.getQuery();
     
@@ -555,10 +651,8 @@ export class Builder {
     const existsQuery = relationQuery.getQuery();
     
     // Add the foreign key = local key constraint
-    const parentTable = this.model.getTable();
-    existsQuery.whereRaw(`${relatedTable}.${foreignKey} = ${parentTable}.${localKey}`);
+    existsQuery.whereRaw(`"${relatedTable}"."${foreignKey}" = "${parentTable}"."${localKey}"`);
     
-    // For now, we only support simple EXISTS checks (count checks can be added later)
     // Add EXISTS constraint
     this.query.whereExists(existsQuery, boolean);
 
@@ -572,7 +666,30 @@ export class Builder {
   protected doesntHave_internal(relation: string, boolean: 'and' | 'or' = 'and', callback?: Function): this {
     // Get the relation instance
     const relationInstance = this.getRelation(relation);
-    
+    const parentTable = this.model.getTable();
+
+    // BelongsToMany — use pivot table NOT EXISTS
+    if (relationInstance.constructor.name === 'BelongsToMany') {
+      const pivotTable = (relationInstance as any).table;
+      const foreignPivotKey = (relationInstance as any).foreignPivotKey;
+      const relatedPivotKey = (relationInstance as any).relatedPivotKey;
+      const parentKey = (relationInstance as any).parentKey || this.model.getKeyName();
+      const relatedTable = relationInstance.getRelated().getTable();
+      const relatedKey = (relationInstance as any).relatedKey || 'id';
+
+      const pivotQuery = this.query.newQuery()
+        .from(pivotTable)
+        .whereRaw(`"${pivotTable}"."${foreignPivotKey}" = "${parentTable}"."${parentKey}"`);
+
+      if (callback) {
+        pivotQuery.join(relatedTable, `${relatedTable}.${relatedKey}`, '=', `${pivotTable}.${relatedPivotKey}`);
+        callback(pivotQuery);
+      }
+
+      this.query.whereNotExists(pivotQuery, boolean);
+      return this;
+    }
+
     // Get the related query builder
     const relationQuery = relationInstance.getQuery();
     
@@ -605,8 +722,7 @@ export class Builder {
     const existsQuery = relationQuery.getQuery();
     
     // Add the foreign key = local key constraint
-    const parentTable = this.model.getTable();
-    existsQuery.whereRaw(`${relatedTable}.${foreignKey} = ${parentTable}.${localKey}`);
+    existsQuery.whereRaw(`"${relatedTable}"."${foreignKey}" = "${parentTable}"."${localKey}"`);
     
     // Add NOT EXISTS
     this.query.whereNotExists(existsQuery, boolean);
@@ -633,7 +749,7 @@ export class Builder {
       instances.push(await this.create(record));
     }
 
-    return new Collection(instances);
+    return Collection.from(instances) as Collection<any>;
   }
 
   /**
@@ -663,10 +779,49 @@ export class Builder {
   }
 
   /**
-   * Apply the scopes to the Eloquent builder instance and return it
+   * Apply the scopes to the Eloquent builder instance and return it.
+   * Reads global scopes from the model and applies each one unless it was removed.
    */
   protected applyScopes(): this {
-    // Scopes will be implemented later
+    const ModelClass = this.model.constructor as typeof Model;
+    const scopes = ModelClass.getGlobalScopes();
+
+    for (const [name, scope] of scopes) {
+      if (this.removedScopes.has(name)) continue;
+
+      if (typeof scope === 'function') {
+        scope(this);
+      } else if (scope && typeof scope.apply === 'function') {
+        scope.apply(this, this.model);
+      }
+    }
+
+    return this;
+  }
+
+  /**
+   * Remove a registered global scope
+   */
+  withoutGlobalScope(scope: string): this {
+    this.removedScopes.add(scope);
+    return this;
+  }
+
+  /**
+   * Remove all or specific global scopes
+   */
+  withoutGlobalScopes(scopes?: string[]): this {
+    if (scopes) {
+      for (const scope of scopes) {
+        this.removedScopes.add(scope);
+      }
+    } else {
+      // Mark all current scopes as removed
+      const ModelClass = this.model.constructor as typeof Model;
+      for (const name of ModelClass.getGlobalScopes().keys()) {
+        this.removedScopes.add(name);
+      }
+    }
     return this;
   }
 
@@ -688,8 +843,8 @@ export class Builder {
   /**
    * Chunk the results of the query
    */
-  async chunk(count: number, callback: (results: Collection<any>, page: number) => boolean | void): Promise<boolean> {
-    return this.query.chunk(count, (results: any[], page: number) => {
+  async chunk(count: number, callback: (results: Collection<any>, page: number) => boolean | void | Promise<boolean | void>): Promise<boolean> {
+    return this.query.chunk(count, async (results: any[], page: number) => {
       const models = this.hydrate(results);
       return callback(models, page);
     });
@@ -698,7 +853,7 @@ export class Builder {
   /**
    * Chunk the results of a query by comparing IDs
    */
-  async chunkById(count: number, callback: (results: Collection<any>, lastId?: any) => boolean | void, column?: string): Promise<boolean> {
+  async chunkById(count: number, callback: (results: Collection<any>, lastId?: any) => boolean | void | Promise<boolean | void>, column?: string): Promise<boolean> {
     column = column || this.model.getKeyName();
     
     return this.query.chunkById(count, (results: any[], lastId?: any) => {
@@ -831,6 +986,19 @@ export class Builder {
   async insert(values: any): Promise<boolean | any[]> { return this.query.insert(values); }
   async insertGetId(values: any, sequence?: string): Promise<number | string> { return this.query.insertGetId(values, sequence); }
   async insertOrIgnore(values: any): Promise<number> { return this.query.insertOrIgnore(values); }
+
+  /**
+   * Insert or update records using an atomic upsert (ON CONFLICT / ON DUPLICATE KEY).
+   *
+   * @param values     - Record(s) to insert.
+   * @param uniqueBy   - Column(s) that form the unique constraint.
+   * @param update     - Column(s) to update on conflict. Defaults to all non-unique columns.
+   */
+  async upsert(values: any | any[], uniqueBy: string | string[], update?: string[]): Promise<number> {
+    const vals = Array.isArray(values) ? values : [values];
+    const unique = Array.isArray(uniqueBy) ? uniqueBy : [uniqueBy];
+    return this.query.upsert(vals, unique, update);
+  }
   async update(values: Record<string, any>): Promise<number> { return this.query.update(values); }
   async increment(column: string, amount: number = 1, extra: Record<string, any> = {}): Promise<number> { return this.query.increment(column, amount, extra); }
   async decrement(column: string, amount: number = 1, extra: Record<string, any> = {}): Promise<number> { return this.query.decrement(column, amount, extra); }

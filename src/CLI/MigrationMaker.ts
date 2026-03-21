@@ -1,5 +1,6 @@
 import * as fs from 'fs';
 import * as path from 'path';
+import { getDirname } from '../Support/compat.js';
 
 /**
  * Migration file generator
@@ -8,7 +9,7 @@ export class MigrationMaker {
   protected stubPath: string;
 
   constructor(stubPath?: string) {
-    this.stubPath = stubPath || path.join(__dirname, '../../stubs/migration.stub');
+    this.stubPath = stubPath || path.join(getDirname(), '../../stubs/migration.stub');
   }
 
   /**
@@ -63,8 +64,8 @@ export class MigrationMaker {
   protected getClassName(name: string): string {
     // Convert snake_case or kebab-case to PascalCase
     return name
-      .split(/[_-]/)
-      .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+      .split(/[_\-\s]+/)
+      .map(word => word.charAt(0).toUpperCase() + word.slice(1))
       .join('');
   }
 
