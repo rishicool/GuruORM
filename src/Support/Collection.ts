@@ -349,13 +349,11 @@ export class Collection<T = any> extends Array<T> {
   }
 
   /**
-   * Slice the collection - Laravel-style: slice(offset, length?)
-   * offset: start index; length: number of items (not end index)
+   * Slice the collection - standard JS semantics: slice(start, end?)
+   * start: start index; end: exclusive end index (not a length)
    */
   // @ts-expect-error - Intentional override: narrowing Array.slice return type
-  slice(offset: number, length?: number): Collection<T> {
-    const start = offset < 0 ? Math.max(this.length + offset, 0) : offset;
-    const end = length !== undefined ? start + length : undefined;
+  slice(start: number, end?: number): Collection<T> {
     return Collection.from(Array.prototype.slice.call(this, start, end)) as unknown as Collection<T>;
   }
 

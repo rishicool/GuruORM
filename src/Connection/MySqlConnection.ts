@@ -1,4 +1,3 @@
-import mysql from 'mysql2/promise';
 import { Connection } from './Connection';
 import { ConnectionConfig } from './ConnectionInterface';
 import { Grammar as QueryGrammar } from '../Query/Grammars/MySqlGrammar';
@@ -9,7 +8,7 @@ import { Processor } from '../Query/Processors/Processor';
  * MySQL Connection class - inspired by Laravel and Illuminate
  */
 export class MySqlConnection extends Connection {
-  protected pool: mysql.Pool | null = null;
+  protected pool: any | null = null;
 
   constructor(config: ConnectionConfig) {
     super(config);
@@ -26,6 +25,18 @@ export class MySqlConnection extends Connection {
    * Create the MySQL connection pool
    */
   protected async createConnection(): Promise<void> {
+    let mysql: any;
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const mod = require('mysql2/promise');
+      // Handle both ESM default export (jest mock) and CJS export (real module)
+      mysql = mod.default || mod;
+    } catch {
+      throw new Error(
+        'mysql2 package is required for MySQL support. Install it with: npm install mysql2'
+      );
+    }
+
     this.pool = mysql.createPool({
       host: this.config.host || 'localhost',
       port: this.config.port || 3306,

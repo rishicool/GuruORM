@@ -1,4 +1,3 @@
-import { Pool, PoolClient } from 'pg';
 import { Connection } from './Connection';
 import { ConnectionConfig } from './ConnectionInterface';
 import { PostgresGrammar } from '../Query/Grammars/PostgresGrammar';
@@ -9,13 +8,13 @@ import { Processor } from '../Query/Processors/Processor';
  * PostgreSQL Connection - inspired by Laravel and Illuminate
  */
 export class PostgresConnection extends Connection {
-  protected pool: Pool | null = null;
+  protected pool: any | null = null;
   /** Cached flag: true only when user supplied a postProcessResponse hook */
   private _hasPostProcess: boolean;
   /** Cached read client — avoids the || fallback on every query */
-  private _readPool: Pool;
+  private _readPool: any;
   /** Dedicated client checked out for the duration of a transaction */
-  private _txClient: PoolClient | null = null;
+  private _txClient: any | null = null;
 
   constructor(config: ConnectionConfig) {
     super(config);
@@ -25,8 +24,20 @@ export class PostgresConnection extends Connection {
     this.useDefaultSchemaGrammar();
     this.useDefaultPostProcessor();
     
-    // Don't await in constructor - pool creation is synchronous
-    this.pool = new Pool({
+    // Lazily require 'pg' so that loading ConnectionManager does not fail
+    // when 'pg' is not installed (only postgres connections need it).
+    let PgPool: any;
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const mod = require('pg');
+      PgPool = mod.Pool;
+    } catch {
+      throw new Error(
+        'pg package is required for PostgreSQL support. Install it with: npm install pg'
+      );
+    }
+
+    this.pool = new PgPool({
       host: this.config.host || 'localhost',
       port: this.config.port || 5432,
       user: this.config.username,
@@ -39,7 +50,7 @@ export class PostgresConnection extends Connection {
 
     this.client = this.pool;
     this._hasPostProcess = typeof this.config.postProcessResponse === 'function';
-    this._readPool = (this.readClient || this.pool) as Pool;
+    this._readPool = this.readClient || this.pool;
   }
 
   /**

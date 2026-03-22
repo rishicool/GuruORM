@@ -1,5 +1,3 @@
-// @ts-ignore - tedious types may not be available
-import { ConnectionPool, Request } from 'tedious';
 import { Connection } from './Connection';
 import { ConnectionConfig } from './ConnectionInterface';
 import { Grammar as QueryGrammar } from '../Query/Grammars/Grammar';
@@ -29,6 +27,17 @@ export class SqlServerConnection extends Connection {
    * Create the SQL Server connection pool
    */
   protected async createConnection(): Promise<void> {
+    let ConnectionPool: any;
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      // @ts-ignore - tedious types may not be available
+      ConnectionPool = require('tedious').ConnectionPool;
+    } catch {
+      throw new Error(
+        'tedious package is required for SQL Server support. Install it with: npm install tedious'
+      );
+    }
+
     const poolConfig = {
       server: this.config.host || 'localhost',
       options: {

@@ -353,14 +353,19 @@ export class Model {
    */
   isFillable(key: string): boolean {
     const SubClass = this.constructor as typeof Model;
-    const hasOwnFillable = Object.prototype.hasOwnProperty.call(SubClass, 'fillable');
-    const hasOwnGuarded  = Object.prototype.hasOwnProperty.call(SubClass, 'guarded');
+    const hasOwnStaticFillable = Object.prototype.hasOwnProperty.call(SubClass, 'fillable');
+    const hasOwnStaticGuarded  = Object.prototype.hasOwnProperty.call(SubClass, 'guarded');
 
-    // Permissive mode: no explicit protection configured
-    if (!hasOwnFillable && !hasOwnGuarded) return true;
+    // Resolve fillable/guarded from static override (subclass) or fall back to instance fields
+    const fillable: string[] = hasOwnStaticFillable
+      ? (SubClass.fillable ?? [])
+      : ((this as any).fillable as string[]) ?? [];
+    const guarded: string[] = hasOwnStaticGuarded
+      ? (SubClass.guarded ?? [])
+      : ((this as any).guarded as string[]) ?? ['*'];
 
-    const fillable = SubClass.fillable ?? [];
-    const guarded  = SubClass.guarded ?? [];
+    // Permissive mode: no explicit protection — both at Model defaults ([] and ['*'])
+    if (fillable.length === 0 && guarded.length === 1 && guarded[0] === '*') return true;
 
     if (fillable.length > 0) return fillable.includes(key);
     if (guarded.includes('*')) return false;
