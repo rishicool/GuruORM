@@ -280,52 +280,68 @@ export class Builder {
         const nestedSegments = nestedRelation.split('.');
         const nextRelation = nestedSegments[0];
         
-        // Check if the method exists on the related model
-        const method = Reflect.get(Object.getPrototypeOf(firstModel), nextRelation);
-        if (typeof method === 'function') {
-          const relationInstance = method.call(firstModel);
-          if (relationInstance && typeof relationInstance.addEagerConstraints === 'function') {
-            // Use eager loading to batch the query
-            if (typeof relationInstance.initRelation === 'function') {
-              relationInstance.initRelation(allRelatedModels, nextRelation);
-            }
-            relationInstance.addEagerConstraints(allRelatedModels);
-            constraints(relationInstance.getQuery());
-            const results = await relationInstance.getQuery().get();
-            relationInstance.match(allRelatedModels, results, nextRelation);
-            
-            // If there are deeper nested relations, recurse on the collected child models
-            if (nestedSegments.length > 1) {
-              const deeperRelation = nestedSegments.slice(1).join('.');
-              const deeperModels: any[] = [];
-              for (const m of allRelatedModels) {
-                const rel = m.relations?.[nextRelation];
-                if (rel) {
-                  if (Array.isArray(rel) || (rel && typeof rel[Symbol.iterator] === 'function')) {
-                    for (const r of rel) {
-                      if (r && typeof r.load === 'function') deeperModels.push(r);
-                    }
-                  } else if (typeof rel.load === 'function') {
-                    deeperModels.push(rel);
-                  }
-                }
+        // Skip re-loading if the relation is already loaded on all models.
+        // This prevents overlapping eager loads (e.g. 'items.variant.product' and
+        // 'items.variant.primaryPhoto') from replacing intermediate model instances
+        // and wiping out previously loaded sub-relations.
+        const alreadyLoaded = allRelatedModels.every(
+          m => m.relations?.[nextRelation] !== undefined
+        );
+        
+        if (!alreadyLoaded) {
+          // Check if the method exists on the related model
+          const method = Reflect.get(Object.getPrototypeOf(firstModel), nextRelation);
+          if (typeof method === 'function') {
+            // Use a fresh empty instance (exists=false) so addConstraints() is a no-op.
+            // Calling method.call(firstModel) would trigger addConstraints() with
+            // firstModel.exists=true, adding a single-record WHERE clause that restricts
+            // the eager batch to only the first model's related records.
+            const emptyParent = firstModel.newInstance({});
+            const relationInstance = method.call(emptyParent);
+            if (relationInstance && typeof relationInstance.addEagerConstraints === 'function') {
+              // Use eager loading to batch the query
+              if (typeof relationInstance.initRelation === 'function') {
+                relationInstance.initRelation(allRelatedModels, nextRelation);
               }
-              // Recursively batch-load deeper levels
-              if (deeperModels.length > 0) {
-                const deeperFirst = deeperModels[0];
-                const deeperMethod = Reflect.get(Object.getPrototypeOf(deeperFirst), deeperRelation.split('.')[0]);
-                if (typeof deeperMethod === 'function') {
-                  // Fallback to individual load for deep nesting
-                  for (const dm of deeperModels) {
-                    await dm.load(deeperRelation);
-                  }
+              relationInstance.addEagerConstraints(allRelatedModels);
+              constraints(relationInstance.getQuery());
+              const results = await relationInstance.getQuery().get();
+              relationInstance.match(allRelatedModels, results, nextRelation);
+            } else {
+              // Fallback: load individually
+              for (const relatedModel of allRelatedModels) {
+                await relatedModel.load(nestedRelation);
+              }
+              return models;
+            }
+          }
+        }
+        
+        // If there are deeper nested relations, recurse on the collected child models
+        if (nestedSegments.length > 1) {
+          const deeperRelation = nestedSegments.slice(1).join('.');
+          const deeperModels: any[] = [];
+          for (const m of allRelatedModels) {
+            const rel = m.relations?.[nextRelation];
+            if (rel) {
+              if (Array.isArray(rel) || (rel && typeof rel[Symbol.iterator] === 'function')) {
+                for (const r of rel) {
+                  if (r && typeof r.load === 'function') deeperModels.push(r);
                 }
+              } else if (typeof rel.load === 'function') {
+                deeperModels.push(rel);
               }
             }
-          } else {
-            // Fallback: load individually
-            for (const relatedModel of allRelatedModels) {
-              await relatedModel.load(nestedRelation);
+          }
+          // Recursively batch-load deeper levels
+          if (deeperModels.length > 0) {
+            const deeperFirst = deeperModels[0];
+            const deeperMethod = Reflect.get(Object.getPrototypeOf(deeperFirst), deeperRelation.split('.')[0]);
+            if (typeof deeperMethod === 'function') {
+              // Fallback to individual load for deep nesting
+              for (const dm of deeperModels) {
+                await dm.load(deeperRelation);
+              }
             }
           }
         }

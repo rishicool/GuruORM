@@ -70,6 +70,33 @@ class TestModelWithPosts extends Model {
   }
 }
 
+// ---- Models for nested eager loading regression test ----
+class BrandModel extends Model {
+  protected table = 'brands';
+  protected static fillable = ['id', 'name'];
+  protected newBaseQueryBuilder() { return mockQB() as any; }
+}
+
+class ProductModel extends Model {
+  protected table = 'products';
+  protected static fillable = ['id', 'name', 'brand_id'];
+  protected newBaseQueryBuilder() { return mockQB() as any; }
+
+  brand() {
+    return this.belongsTo(BrandModel, 'brand_id');
+  }
+}
+
+class InventoryModel extends Model {
+  protected table = 'inventory';
+  protected static fillable = ['id', 'product_id', 'stock'];
+  protected newBaseQueryBuilder() { return mockQB() as any; }
+
+  product() {
+    return this.belongsTo(ProductModel, 'product_id');
+  }
+}
+
 describe('Eloquent / Builder — deep coverage', () => {
   beforeEach(() => { (Model as any).booted = new Map(); });
 
@@ -282,6 +309,83 @@ describe('Eloquent / Builder — deep coverage', () => {
       b.with('posts.comments');
       const result = await b.get();
       expect(result).toBeDefined();
+    });
+
+    /**
+     * Regression test: nested eager loading (product.brand) must load brand for ALL
+     * inventory items, not just the first one.
+     *
+     * Bug: eagerLoadNestedRelation called method.call(firstModel) where firstModel.exists=true,
+     * causing addConstraints() to add WHERE id = firstModel.brand_id BEFORE the
+     * WHERE IN (all_brand_ids) eager constraint — so only the first brand was returned.
+     *
+     * Fix: use firstModel.newInstance({}) (exists=false) so addConstraints() is a no-op.
+     */
+    test('nested belongsTo loads relation for ALL parent models, not just first', async () => {
+      const brand1 = new BrandModel({ id: 'brand-1', name: 'Brand One' }, true as any);
+      const brand2 = new BrandModel({ id: 'brand-2', name: 'Brand Two' }, true as any);
+      const brand3 = new BrandModel({ id: 'brand-3', name: 'Brand Three' }, true as any);
+
+      const prod1 = InventoryModel.prototype.product.call(new ProductModel({ id: 'prod-1', name: 'Product 1', brand_id: 'brand-1' }));
+      void prod1; // suppress unused warning
+
+      // Build 3 inventory models with different product_ids (exists=true)
+      const inv1 = new InventoryModel({ id: 'inv-1', product_id: 'prod-1', stock: 10 });
+      const inv2 = new InventoryModel({ id: 'inv-2', product_id: 'prod-2', stock: 20 });
+      const inv3 = new InventoryModel({ id: 'inv-3', product_id: 'prod-3', stock: 30 });
+      (inv1 as any).exists = true;
+      (inv2 as any).exists = true;
+      (inv3 as any).exists = true;
+
+      // Attach product relations with different brand_ids to each inventory
+      const p1 = new ProductModel({ id: 'prod-1', name: 'P1', brand_id: 'brand-1' });
+      const p2 = new ProductModel({ id: 'prod-2', name: 'P2', brand_id: 'brand-2' });
+      const p3 = new ProductModel({ id: 'prod-3', name: 'P3', brand_id: 'brand-3' });
+      (p1 as any).exists = true;
+      (p2 as any).exists = true;
+      (p3 as any).exists = true;
+      (inv1 as any).relations.product = p1;
+      (inv2 as any).relations.product = p2;
+      (inv3 as any).relations.product = p3;
+
+      const inventoryModels = [inv1, inv2, inv3];
+
+      // Create a builder for InventoryModel and manually invoke eagerLoadNestedRelation
+      const { b, qb } = builder(new InventoryModel());
+
+      // Mock the brand query to capture the whereIn call and return all 3 brands
+      const brandQB = mockQB();
+      const whereInSpy = jest.fn().mockReturnThis();
+      brandQB.whereIn = whereInSpy;
+      brandQB.where = jest.fn().mockReturnThis();
+      brandQB.get.mockResolvedValue([
+        { id: 'brand-1', name: 'Brand One' },
+        { id: 'brand-2', name: 'Brand Two' },
+        { id: 'brand-3', name: 'Brand Three' },
+      ]);
+
+      // Monkeypatch BrandModel to use our controlled QB
+      const origQB = BrandModel.prototype.newBaseQueryBuilder;
+      (BrandModel.prototype as any).newBaseQueryBuilder = () => brandQB;
+
+      // Load the nested relation using the builder
+      const result = await (b as any).eagerLoadNestedRelation(inventoryModels, 'product.brand', (q: any) => q);
+
+      // Restore
+      (BrandModel.prototype as any).newBaseQueryBuilder = origQB;
+
+      // CRITICAL: whereIn must have been called with ALL 3 brand ids, not just brand-1
+      const whereInCall = whereInSpy.mock.calls.find((call: any[]) => call[0] === 'id');
+      expect(whereInCall).toBeDefined();
+      const idsPassedToWhereIn: string[] = whereInCall![1];
+      expect(idsPassedToWhereIn).toContain('brand-1');
+      expect(idsPassedToWhereIn).toContain('brand-2');
+      expect(idsPassedToWhereIn).toContain('brand-3');
+
+      // All 3 products should have their brand loaded
+      expect((result[0] as any).relations.product.relations.brand?.getAttribute('id')).toBe('brand-1');
+      expect((result[1] as any).relations.product.relations.brand?.getAttribute('id')).toBe('brand-2');
+      expect((result[2] as any).relations.product.relations.brand?.getAttribute('id')).toBe('brand-3');
     });
   });
 
