@@ -33,7 +33,7 @@ mgr.addConnection({
   host:     'localhost',
   port:     5432,
   database: 'guruorm_bench',
-  username: 'egmnz',
+  username: 'postgres',
   password: '',
   pool: { min: 2, max: 5 },
 }, 'default');

@@ -4,7 +4,6 @@ generator client {
 
 datasource db {
   provider = "postgresql"
-  url      = "postgresql://egmnz@localhost:5432/guruorm_bench"
 }
 
 model User {

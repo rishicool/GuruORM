@@ -9,7 +9,7 @@ const knex       = require('knex');
 const { Client } = require('pg');
 const path       = require('path');
 
-const CONN  = { host:'localhost', port:5432, database:'guruorm_bench', user:'egmnz' };
+const CONN  = { host:'localhost', port:5432, database:'guruorm_bench', user:'postgres' };
 const ITERS = 30;
 
 // ── Knex instance ────────────────────────────────────────────────────────────
@@ -18,7 +18,7 @@ const kx = knex({ client:'pg', connection:CONN, pool:{ min:1, max:5 } });
 // ── GuruORM bootstrap ───────────────────────────────────────────────────────
 const { Manager, DB: _DB } = require(path.resolve(__dirname, '../dist/index.js'));
 const capsule = new Manager();
-capsule.addConnection({ driver:'postgres', host:'localhost', port:5432, database:'guruorm_bench', username:'egmnz', password:'' }, 'default');
+capsule.addConnection({ driver:'postgres', host:'localhost', port:5432, database:'guruorm_bench', username:'postgres', password:'' }, 'default');
 capsule.setAsGlobal();
 const DB = _DB;
 

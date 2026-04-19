@@ -10,14 +10,14 @@
 const { Pool } = require('pg');
 const path     = require('path');
 
-const pgPool = new Pool({ host:'localhost', port:5432, database:'guruorm_bench', user:'egmnz', max:5 });
+const pgPool = new Pool({ host:'localhost', port:5432, database:'guruorm_bench', user:'postgres', max:5 });
 
 const knex = require('knex');
-const kx   = knex({ client:'pg', connection:{ host:'localhost', port:5432, database:'guruorm_bench', user:'egmnz' }, pool:{ min:1, max:5 } });
+const kx   = knex({ client:'pg', connection:{ host:'localhost', port:5432, database:'guruorm_bench', user:'postgres' }, pool:{ min:1, max:5 } });
 
 const { Manager, DB: _DB } = require(path.resolve(__dirname, '../dist/index.js'));
 const capsule = new Manager();
-capsule.addConnection({ driver:'postgres', host:'localhost', port:5432, database:'guruorm_bench', username:'egmnz', password:'', pool:{ min:1, max:5 } }, 'default');
+capsule.addConnection({ driver:'postgres', host:'localhost', port:5432, database:'guruorm_bench', username:'postgres', password:'', pool:{ min:1, max:5 } }, 'default');
 capsule.setAsGlobal();
 const DB = _DB;
 

@@ -25,15 +25,15 @@
 
 // ── Shared pg pool ────────────────────────────────────────────────────────────
 const { Pool } = require('pg');
-const pgPool   = new Pool({ host:'localhost', port:5432, database:'guruorm_bench', user:'egmnz', max:5 });
+const pgPool   = new Pool({ host:'localhost', port:5432, database:'guruorm_bench', user:'postgres', max:5 });
 
 // ── Knex ─────────────────────────────────────────────────────────────────────
 const knex = require('knex');
-const kx   = knex({ client:'pg', connection:{ host:'localhost', port:5432, database:'guruorm_bench', user:'egmnz' }, pool:{ min:1, max:5 } });
+const kx   = knex({ client:'pg', connection:{ host:'localhost', port:5432, database:'guruorm_bench', user:'postgres' }, pool:{ min:1, max:5 } });
 
 // ── Sequelize ─────────────────────────────────────────────────────────────────
 const { Sequelize, DataTypes, Op } = require('sequelize');
-const seq = new Sequelize('guruorm_bench', 'egmnz', null, {
+const seq = new Sequelize('guruorm_bench', 'postgres', null, {
   host:'localhost', port:5432, dialect:'postgres', logging:false, pool:{ min:1, max:5 },
 });
 
@@ -132,12 +132,11 @@ const TOrderItemSchema = new typeorm.EntitySchema({
   },
 });
 
-// ── Prisma 5 ──────────────────────────────────────────────────────────────────
+// ── Prisma ────────────────────────────────────────────────────────────────────
 const { PrismaClient } = require('@prisma/client');
-const prisma = new PrismaClient({
-  datasources: { db: { url: 'postgresql://egmnz@localhost:5432/guruorm_bench' } },
-  log: [],
-});
+const { PrismaPg } = require('@prisma/adapter-pg');
+const prismaAdapter = new PrismaPg({ connectionString: 'postgresql://postgres@localhost:5432/guruorm_bench' });
+const prisma = new PrismaClient({ adapter: prismaAdapter, log: [] });
 
 // ── Sequelize Models (needed for Section B) ───────────────────────────────────
 const SeqUser = seq.define('User', {
@@ -181,7 +180,7 @@ const SeqOrderItem = seq.define('OrderItem', {
 const path = require('path');
 const { Manager, DB: _DB } = require(path.resolve(__dirname, '../dist/index.js'));
 const capsule = new Manager();
-capsule.addConnection({ driver:'postgres', host:'localhost', port:5432, database:'guruorm_bench', username:'egmnz', password:'', pool:{ min:1, max:5 } }, 'default');
+capsule.addConnection({ driver:'postgres', host:'localhost', port:5432, database:'guruorm_bench', username:'postgres', password:'', pool:{ min:1, max:5 } }, 'default');
 capsule.setAsGlobal();
 const DB = _DB;
 
@@ -448,7 +447,7 @@ function toJsonRow(q) {
 async function main() {
   typeormDS = new typeorm.DataSource({
     type:'postgres', host:'localhost', port:5432, database:'guruorm_bench',
-    username:'egmnz', password:undefined, synchronize:false, logging:false,
+    username:'postgres', password:undefined, synchronize:false, logging:false,
     poolSize:5, entities:[ TUserSchema, TProductSchema, TOrderSchema, TOrderItemSchema ],
   });
   await typeormDS.initialize();

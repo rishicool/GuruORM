@@ -2,7 +2,7 @@
 const { Client } = require('pg');
 const copyFrom = require('pg-copy-streams').from;
 
-const DB = { host:'localhost', port:5432, database:'guruorm_bench', user:'egmnz' };
+const DB = { host:'localhost', port:5432, database:'guruorm_bench', user:'postgres' };
 
 let _s = 0xDEADBEEF;
 const rng  = () => { _s^=_s<<13;_s^=_s>>17;_s^=_s<<5; return (_s>>>0)/0xFFFFFFFF; };
